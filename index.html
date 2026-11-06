@@ -336,6 +336,7 @@ details.menu[open]>summary{color:var(--text)}
 }
 @media(prefers-reduced-motion:reduce){.toast{animation:none}}
 .nu{padding:8px 10px;margin:6px 0}.nu .btns,.savedfinal .btns{gap:7px;align-items:center;margin:6px 0 0}.nu .btn,.savedfinal .btn{min-height:36px;padding:6px 10px;font-size:13px;line-height:1.2}.nu small{font-size:13px;line-height:1.35}.calculation-hint,[data-derived]{display:block;margin-top:4px;font-size:12px;line-height:1.4;color:var(--muted)}[data-derived]:empty{display:none}
+.btn,button.btn,.btn.sm,.nu .btn,.savedfinal .btn{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:36px;line-height:20px;padding-top:7px;padding-bottom:7px;vertical-align:middle}.btns{align-items:center}
 </style>
 </head>
 <body>
@@ -1474,8 +1475,9 @@ async function copyTextQuiet(t) {
 
 /* ================= plan: a list (editable) or a not-in-a-list collection (ordered by start coordinates) ================= */
 const typeColor = t => ({Virtual: 'var(--virt)', EarthCache: 'var(--earth)', Multi: '#e08a1e', Puzzle: '#8e5bd0', Traditional: '#2f9e5b'}[t] || '#7a8a80');
+function mapDarkTheme(){const theme=document.documentElement.dataset.theme;return theme==='dark'||(theme!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);}
 const MAPS = {
-  simple: {label: 'Simple roads & water — no key', max: 16, attr: 'Esri · HERE · Garmin · FAO · NOAA · USGS · OpenStreetMap', url: (x, y, z) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/${z}/${y}/${x}`},
+  simple: {label: 'Simple roads & water — no key', max: 16, attr: 'Esri · HERE · Garmin · FAO · NOAA · USGS · OpenStreetMap', url: (x, y, z) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${mapDarkTheme()?'World_Dark_Gray_Base':'World_Light_Gray_Base'}/MapServer/tile/${z}/${y}/${x}`},
   usgsdetail: {label: 'Detailed USGS topo — US only', max: 16, attr: 'USGS The National Map', url: (x, y, z) => `https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/${z}/${y}/${x}`},
   usgsimg: {label: 'Detailed USGS imagery — US only', max: 16, attr: 'USGS The National Map', url: (x, y, z) => `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/${z}/${y}/${x}`},
   carto: {label: 'CARTO Voyager — needs your free key', max: 18, key: true, attr: '© OpenStreetMap contributors © CARTO', url: (x, y, z) => `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png?key=${encodeURIComponent(UI.cartoKey || '')}`},
@@ -1527,7 +1529,7 @@ function mapSVG() {
     if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 64)
       for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++)
         s += `<image href="${prov.url(((tx % 2 ** z) + 2 ** z) % 2 ** z, ty, z)}" x="${tx * 256}" y="${ty * 256}" width="256" height="256" preserveAspectRatio="none" onerror="this.remove()"/>`;
-    s += `<text x="${x0 + vbw - 4 * k}" y="${y0 + vbh - 5 * k}" text-anchor="end" font-size="${9 * k}" fill="#444" opacity=".85" stroke="#fff" stroke-width="${2.2 * k}" paint-order="stroke">${esc(prov.attr)}</text>`;
+    s += `<text x="${x0 + vbw - 4 * k}" y="${y0 + vbh - 5 * k}" text-anchor="end" font-size="${9 * k}" fill="var(--muted)" opacity=".85" stroke="var(--bg)" stroke-width="${2.2 * k}" paint-order="stroke">${esc(prov.attr)}</text>`;
   }
   const route = order.map(cachePosition).filter(c => c && c.lat != null);
   if (route.length > 1) s += `<polyline points="${route.map(c => X(c.lon).toFixed(1) + ',' + Y(c.lat).toFixed(1)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="${2.4 * k}" stroke-dasharray="${6 * k} ${5 * k}"/>`;
@@ -3257,6 +3259,9 @@ for(const c of Object.values(DB.caches))if(applyRawLayout(c))migratedStages=true
 for(const code of Object.keys(DB.caches))if(recognizeFinal(code))migratedStages=true;
 for(const c of Object.values(DB.caches)){const previous=structuredClone(c.stages||[]);if(upgradeStageLayout(c)){remapStageInputs(c.code,previous,c.stages);migratedStages=true;}}
 if(migratedStages)save();
+const repaintMapTheme=()=>{if(UI.tab==='plan')renderPlan();};
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',repaintMapTheme);
+new MutationObserver(repaintMapTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 render();
 requestNearbyLocation();
 
