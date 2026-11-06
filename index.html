@@ -329,6 +329,7 @@ details.menu[open]>summary{color:var(--text)}
 
 .nu{padding:8px 10px;margin:6px 0}.nu .btns,.savedfinal .btns{gap:7px;align-items:center;margin:6px 0 0}.nu .btn,.savedfinal .btn{min-height:36px;padding:6px 10px;font-size:13px;line-height:1.2}.nu small{font-size:13px;line-height:1.35}.calculation-hint,[data-derived]{display:block;margin-top:4px;font-size:12px;line-height:1.4;color:var(--muted)}[data-derived]:empty{display:none}
 .btn,button.btn,.btn.sm,.nu .btn,.savedfinal .btn{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:36px;line-height:20px;padding-top:7px;padding-bottom:7px;vertical-align:middle}.btns{align-items:center}
+.actions2 .btn{font-size:14px}.final-container{margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}.final-container h4{font-size:14px;margin:0 0 6px}.final-container .desc{margin-top:7px}
 </style>
 </head>
 <body>
@@ -1792,6 +1793,19 @@ const EDITMD = {};     // transient: which stage's text is in edit mode
 function mdField(code, sid, field, text, rows, label) {
   return `<label class="mdlab">${label}</label><div class="mdedit"><div class="mdbg" aria-hidden="true">${mdMarkup(text)}</div><textarea class="mdta" rows="${rows}" data-mdf="${code}|${sid}|${field}" spellcheck="true" placeholder="${field === 'note' ? 'Short note under the title' : 'Type text; **bold**, _italic_, [link text](https://…), - lists'}">${esc(text)}</textarea></div>`;
 }
+function listingHideDetails(c){
+ const rules=/you(?:’|')?re looking for a nano|you are looking for a nano|cache is on public property|cache container|final is (?:just )?a micro|please do not take the stamp|stickers.*stamp|cache has some interesting|trade evenly|stealth.*(?:retriev|re-hid)|no need to enter private property|cache is a now a mini|cache should be a short walk|final is a short (?:walk|drive)|cache itself should be an easy find/i;
+ return String(c.description||'').split(/\n+/).map(x=>x.trim()).filter(x=>x&&rules.test(x)&&!/cache container is found at:\s*$/i.test(x));
+}
+function finalContainerHTML(code,s){
+ const c=C(code);if(s!==(c.stages||[]).at(-1))return '';
+ const facts=[...(c.stages||[]).map(x=>x.finalDetails).filter(Boolean),...listingHideDetails(c),...(c.waypoints||[]).filter(w=>/final location/i.test(w.type||'')).map(w=>w.note).filter(Boolean)];
+ const unique=[...new Set(facts.flatMap(x=>String(x).split(/\n\s*\n/)).map(x=>x.trim()).filter(Boolean))];
+ const hint=c.hint && !/^none$/i.test(c.hint.trim())?c.hint:'';
+ const size=c.size&&!/^(?:none|not chosen|unknown)$/i.test(c.size)?c.size:'';
+ if(!unique.length&&!hint&&!size)return '';
+ return `<section class="final-container"><h4>Final container &amp; hide</h4>${size?`<p class="note">Container size: ${esc(size)}</p>`:''}${unique.map(text=>`<div class="desc md">${renderMd(text)}</div>`).join('')}${hint?`<div class="desc md"><b>Listing hint</b><br>${renderMd(hint)}</div>`:''}</section>`;
+}
 function stageHTML(code, s, i, cur) {
   const st = ((prog(code).st || {})[s.id]) || {in: {}, done: false};
   return `<details class="stage ${st.done ? 'sdone' : ''}" ${i === cur ? 'open' : ''}>
@@ -1807,6 +1821,7 @@ function stageHTML(code, s, i, cur) {
     ${s.manual_coords ? `<label>Coordinates returned by checker / found on site<input data-sresolved="${code}|${s.id}" value="${esc(st.solved||'')}" placeholder="N 38° … W 077° …"></label>` : ''}
     <div id="seq-${code}-${s.id}"></div><div class="res" id="sres-${code}-${s.id}"></div>
     <div class="btns" style="margin-top:8px"><button class="btn sm ${EDITMD[code + '|' + s.id] ? 'pri' : ''}" data-act="edit-stage-text" data-code="${code}" data-sid="${s.id}">${EDITMD[code + '|' + s.id] ? 'Done' : (s.desc ? 'Edit text & links' : '+ Add text / links')}</button></div>
+    ${finalContainerHTML(code,s)}
     <label class="stagecomplete"><input type="checkbox" data-sdone="${code}|${s.id}" ${st.done ? 'checked' : stageMissingAnswers(code,s.id).length && !allowEarlierCompletion(code) ? 'aria-disabled="true"' : ''}><span class="stagecheck" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 10.5l4 4L16 6.5"/></svg></span><span class="stagemsg"><b>${st.done ? (st.done_without_answers?'Stage completed · saved-final override':'Stage completed') : 'Mark stage complete'}</b><small>${st.done ? 'Tap to reopen this stage' : 'Save your progress and continue'}</small></span></label>
   </details>`;
 }
@@ -1859,7 +1874,7 @@ function updStage(code, sid) {
   if (r.lat != null) {
 
     const ck = stageCheckers(c, s); if (ck.length) x += `<div class="btns checkerrow">${ck.map(v => `<button class="btn sm" data-act="stage-checker" data-code="${code}" data-sid="${sid}" data-url="${esc(v.url)}">${esc(v.label)} ↗</button>`).join('')}</div>`;
-    const hide = s.finalDetails || (final ? c.hint : ''); if (final && hide) x += `<details class="finalhide"><summary>Final hide details — reveal when ready</summary><div class="desc md">${renderMd(hide)}</div></details>`;
+
     if (c.lat != null && hav([c.lat, c.lon], [r.lat, r.lon]) > 50) x += `<div class="warn">That’s over 50 mi from the posted coordinates. Recheck your inputs.</div>`;
   }
   if (r.odd) x += `<div class="warn">A ( ) group isn’t a single digit 0–9. Fine for multi-digit parts, but verify against the listing.</div>`;
