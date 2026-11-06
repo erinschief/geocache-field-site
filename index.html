@@ -683,6 +683,7 @@ function savedFinalHTML(code){
   return `<details class="savedfinal" open><summary>Saved final location</summary>${scrapedFinal(code)?`<p class="note">Final coordinates pulled from the geocache’s info page.</p><div class="c">${esc(dmText(...parseLoc(prog(code).solved)))}</div>`:`<label>Final coordinates<input data-final-location="${code}" value="${esc(prog(code).solved||'')}" placeholder="N … W …"></label>`}<div id="savedfinal-${code}"></div></details>`;
 }
 function refreshSavedFinal(code){
+  refreshFinalSection(code);
   const el=document.getElementById('savedfinal-'+code);if(!el)return;
   const value=String(prog(code).solved||'').trim(),pos=parseLoc(value),c=C(code);
   el.closest('.savedfinal').hidden=!value;if(!value)return;
@@ -994,7 +995,7 @@ function updateStageCompletion(code,sid) {
   const label=checkbox.closest('.stagecomplete'),message=label?.querySelector('.stagemsg small');
   if(message)message.textContent=done?(prog(code).st?.[sid]?.done_without_answers?'Completed without historical answers · tap to reopen':'Tap to reopen this stage'):missing.length?(allowEarlierCompletion(code)?'Saved final available — earlier answers optional':'Complete stage info entry to continue'):'All answers filled — ready to complete';
 }
-function refreshStageResults(code) { (C(code).stages||[]).forEach(s=>updStage(code,s.id));refreshCard(code);refreshSavedFinal(code); }
+function refreshStageResults(code) { (C(code).stages||[]).forEach(s=>updStage(code,s.id));refreshCard(code);refreshSavedFinal(code);refreshFinalSection(code); }
 function remapStageInputs(code, oldStages, newStages) {
   const p=DB.prog[code];if(!p?.st)return;
   const layout=stages=>(stages||[]).map(s=>({id:s.id,inputs:s.inputs||[]}));
@@ -1797,14 +1798,22 @@ function listingHideDetails(c){
  const rules=/you(?:’|')?re looking for a nano|you are looking for a nano|cache is on public property|cache container|final is (?:just )?a micro|please do not take the stamp|stickers.*stamp|cache has some interesting|trade evenly|stealth.*(?:retriev|re-hid)|no need to enter private property|cache is a now a mini|cache should be a short walk|final is a short (?:walk|drive)|cache itself should be an easy find/i;
  return String(c.description||'').split(/\n+/).map(x=>x.trim()).filter(x=>x&&rules.test(x)&&!/cache container is found at:\s*$/i.test(x));
 }
-function finalContainerHTML(code,s){
- const c=C(code);if(s!==(c.stages||[]).at(-1))return '';
+function finalDestination(code){
+ const c=C(code),saved=parseLoc(prog(code).solved);if(saved)return {lat:saved[0],lon:saved[1],source:scrapedFinal(code)?'From geocache info page':'Saved final coordinates'};
+ const stages=c.stages||[],last=stages.at(-1);if(!last)return null;
+ const calculation=stages.slice().reverse().find(stage=>stage.N||stage.S||stage.offset||stage.choices?.length||stage.manual_coords);
+ if(calculation){const r=stageResult(code,calculation.id);return r?.lat!=null?{lat:r.lat,lon:r.lon,source:'Calculated final location'}:null;}
+ const listed=parseLoc(last.coords||'');return listed&&!last.inputs?.length?{lat:listed[0],lon:listed[1],source:'Listed final coordinates'}:null;
+}
+function refreshFinalSection(code){const el=document.getElementById('final-section-'+code);if(el)el.innerHTML=finalContainerHTML(code);}
+function finalContainerHTML(code){
+ const c=C(code);if(!(c.stages||[]).length)return '';const destination=finalDestination(code);
  const facts=[...(c.stages||[]).map(x=>x.finalDetails).filter(Boolean),...listingHideDetails(c),...(c.waypoints||[]).filter(w=>/final location/i.test(w.type||'')).map(w=>w.note).filter(Boolean)];
  const unique=[...new Set(facts.flatMap(x=>String(x).split(/\n\s*\n/)).map(x=>x.trim()).filter(Boolean))];
  const hint=c.hint && !/^none$/i.test(c.hint.trim())?c.hint:'';
  const size=c.size&&!/^(?:none|not chosen|unknown)$/i.test(c.size)?c.size:'';
- if(!unique.length&&!hint&&!size)return '';
- return `<section class="final-container"><h4>Final container &amp; hide</h4>${size?`<p class="note">Container size: ${esc(size)}</p>`:''}${unique.map(text=>`<div class="desc md">${renderMd(text)}</div>`).join('')}${hint?`<div class="desc md"><b>Listing hint</b><br>${renderMd(hint)}</div>`:''}</section>`;
+
+ return `<div class="qh">Final location &amp; hide</div><section class="final-container">${destination?`<div class="c">${esc(dmText(destination.lat,destination.lon))}</div><p class="note">${esc(destination.source)}</p>${navBtns(destination.lat,destination.lon,c.name+' — final')}`:'<p class="note">Final coordinates will appear here when saved or calculated.</p>'}${size?`<p class="note">Container size: ${esc(size)}</p>`:''}${unique.map(text=>`<div class="desc md">${renderMd(text)}</div>`).join('')}${hint?`<div class="desc md"><b>Listing hint</b><br>${renderMd(hint)}</div>`:''}</section>`;
 }
 function stageHTML(code, s, i, cur) {
   const st = ((prog(code).st || {})[s.id]) || {in: {}, done: false};
@@ -1821,7 +1830,6 @@ function stageHTML(code, s, i, cur) {
     ${s.manual_coords ? `<label>Coordinates returned by checker / found on site<input data-sresolved="${code}|${s.id}" value="${esc(st.solved||'')}" placeholder="N 38° … W 077° …"></label>` : ''}
     <div id="seq-${code}-${s.id}"></div><div class="res" id="sres-${code}-${s.id}"></div>
     <div class="btns" style="margin-top:8px"><button class="btn sm ${EDITMD[code + '|' + s.id] ? 'pri' : ''}" data-act="edit-stage-text" data-code="${code}" data-sid="${s.id}">${EDITMD[code + '|' + s.id] ? 'Done' : (s.desc ? 'Edit text & links' : '+ Add text / links')}</button></div>
-    ${finalContainerHTML(code,s)}
     <label class="stagecomplete"><input type="checkbox" data-sdone="${code}|${s.id}" ${st.done ? 'checked' : stageMissingAnswers(code,s.id).length && !allowEarlierCompletion(code) ? 'aria-disabled="true"' : ''}><span class="stagecheck" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 10.5l4 4L16 6.5"/></svg></span><span class="stagemsg"><b>${st.done ? (st.done_without_answers?'Stage completed · saved-final override':'Stage completed') : 'Mark stage complete'}</b><small>${st.done ? 'Tap to reopen this stage' : 'Save your progress and continue'}</small></span></label>
   </details>`;
 }
@@ -1833,6 +1841,7 @@ function stagesHTML(code) {
 
     ${c.auto_stages && stages.length ? `<div class="warnbox">Stages were detected automatically from the description — check them against the listing. <button class="btn sm" data-act="edit-stages" data-code="${code}">Review</button> <button class="btn sm" data-act="stages-ok" data-code="${code}">Looks right</button></div>` : ''}
     ${stages.length ? stages.map((s, i) => stageHTML(code, s, i, cur)).join('') : '<div class="note">No stages yet. Use ⋯ → Edit stages to add them (title, inputs, N/W formulas or fixed coordinates).</div>'}
+    <div id="final-section-${code}">${finalContainerHTML(code)}</div>
     ${notesHTML(code, 'Scratch notes, values found, ideas…', 'Personal notes')}`;
 }
 function notesHTML(code, ph, title) {
