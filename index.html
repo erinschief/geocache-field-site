@@ -1806,14 +1806,17 @@ function finalDestination(code){
  const listed=parseLoc(last.coords||'');return listed&&!last.inputs?.length?{lat:listed[0],lon:listed[1],source:'Listed final coordinates'}:null;
 }
 function refreshFinalSection(code){const el=document.getElementById('final-section-'+code);if(el)el.innerHTML=finalContainerHTML(code);}
-function finalContainerHTML(code){
- const c=C(code);if(!(c.stages||[]).length)return '';const destination=finalDestination(code);
+function finalFacts(c){
  const facts=[...(c.stages||[]).map(x=>x.finalDetails).filter(Boolean),...listingHideDetails(c),...(c.waypoints||[]).filter(w=>/final location/i.test(w.type||'')).map(w=>w.note).filter(Boolean)];
- const unique=[...new Set(facts.flatMap(x=>String(x).split(/\n\s*\n/)).map(x=>x.trim()).filter(Boolean))];
- const hint=c.hint && !/^none$/i.test(c.hint.trim())?c.hint:'';
+ return [...new Set(facts.flatMap(x=>String(x).split(/\n\s*\n/)).map(x=>x.trim()).filter(Boolean))];
+}
+function finalContainerHTML(code){
+ const c=C(code);if(!(c.stages||[]).length || !(c.stages||[]).every(stage=>prog(code).st?.[stage.id]?.done))return '';const destination=finalDestination(code);
+ const unique=Object.hasOwn(prog(code),'final_details_override')?[prog(code).final_details_override].filter(Boolean):finalFacts(c);
+ const hint=Object.hasOwn(prog(code),'final_hint_override')?prog(code).final_hint_override:c.hint && !/^none$/i.test(c.hint.trim())?c.hint:'';
  const size=c.size&&!/^(?:none|not chosen|unknown)$/i.test(c.size)?c.size:'';
 
- return `<div class="qh">Final location &amp; hide</div><section class="final-container">${destination?`<div class="c">${esc(dmText(destination.lat,destination.lon))}</div><p class="note">${esc(destination.source)}</p>${navBtns(destination.lat,destination.lon,c.name+' — final')}`:'<p class="note">Final coordinates will appear here when saved or calculated.</p>'}${size?`<p class="note">Container size: ${esc(size)}</p>`:''}${unique.map(text=>`<div class="desc md">${renderMd(text)}</div>`).join('')}${hint?`<div class="desc md"><b>Listing hint</b><br>${renderMd(hint)}</div>`:''}</section>`;
+ return `<div class="qh">Final location &amp; hide</div><section class="final-container">${destination?`<div class="c">${esc(dmText(destination.lat,destination.lon))}</div><p class="note">${esc(destination.source)}</p>${navBtns(destination.lat,destination.lon,c.name+' — final')}`:'<p class="note">Final coordinates will appear here when saved or calculated.</p>'}${size?`<p class="note">Container size: ${esc(size)}</p>`:''}${unique.map(text=>`<div class="desc md">${renderMd(text)}</div>`).join('')}${hint?`<div class="desc md"><b>Hint</b><br>${renderMd(hint)}</div>`:''}<button class="btn sm" data-act="edit-final-info" data-code="${code}">Edit final details</button></section>`;
 }
 function stageHTML(code, s, i, cur) {
   const st = ((prog(code).st || {})[s.id]) || {in: {}, done: false};
@@ -2189,6 +2192,8 @@ document.addEventListener('click', async e => {
   if (act === 'autozoom') { PLANZOOM = 0; PLANPAN = {x:0,y:0}; renderPlan(); return; }
   if (act === 'mapmark') { if (MAPMOVED) return; PLANFOCUS=code; UI.tab='field'; save(); render(); if(!document.getElementById('card-'+code)){ document.getElementById('app').innerHTML=cardHTML(code,0);afterCardRender(code); } document.getElementById('card-'+code)?.scrollIntoView({block:'start'}); return; }
   if (act === 'nearby-refresh') { NEARBY.orderPos=NEARBY.pos?[NEARBY.pos.latitude,NEARBY.pos.longitude]:null; { if(NEARBY.watch!=null)navigator.geolocation.clearWatch(NEARBY.watch); NEARBY.watch=null; requestNearbyLocation(NEARBY.high); } render(); return; }
+  if(act==='edit-final-info'){const p=prog(code),c=C(code);openModal(`<h2>Edit final details</h2><label class="slab">Hide and container details<textarea id="final-info-text" rows="6">${esc(Object.hasOwn(p,'final_details_override')?p.final_details_override:finalFacts(c).join('\n\n'))}</textarea></label><label class="slab">Hint<textarea id="final-hint-text" rows="3">${esc(Object.hasOwn(p,'final_hint_override')?p.final_hint_override:c.hint||'')}</textarea></label><button class="btn pri" data-act="save-final-info" data-code="${code}">Save details</button><button class="btn" data-act="closemodal">Cancel</button>`);return;}
+  if(act==='save-final-info'){const p=PR(code);p.final_details_override=g('final-info-text').value;p.final_hint_override=g('final-hint-text').value;save();closeModal();refreshFinalSection(code);toast('Final details saved');return;}
   if(act==='toggle-stage-override'){PR(code).allow_incomplete_stages=!allowEarlierCompletion(code);save();rerenderCard(code);return;}
   if(act==='go-final-stage'){const c=C(code),final=c.stages?.at(-1);if(!final||!parseLoc(prog(code).solved))return;const p=PR(code);p.focus_stage=final.id;p.use_saved_final=true;save();rerenderCard(code);const checkbox=document.querySelector(`[data-sdone="${code}|${final.id}"]`);checkbox?.closest('details.stage')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
   if(act==='field-progress'||act==='field-undo'){
