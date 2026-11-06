@@ -825,17 +825,54 @@ function applyRawLayout(c){
   Object.assign(def,structuredClone(spec));
  }c.raw_input_version=1;return changed;
 }
-function observationPlaceholder(def){
- const label=String(def.l||'').toLowerCase();
- if(/\bage\b/.test(label)&&/death|died|age at/.test(label))return 'age';
+function expectedInputPlaceholder(def,context=''){
+ const custom=String(def.expected_input||def.placeholder||def.ph||'').trim();
+ const generic=/^(?:your answer|answer|number|YYYY|enter (?:the )?(?:(?:full|original) )?(?:observation|value|number|answer)|full (?:four-digit year|street address number)|street letter \(e\.g\. C\))$/i;
+ if(custom&&!generic.test(custom))return custom;
+ const own=String(def.l||def.label||def.prompt||def.title||'').trim();
+ const label=(own && !/^(?:answer|value|observation)(?: \d+)?$/i.test(own)?own:context).toLowerCase();
+ const steps=def.transform?.steps||[];
+ if(def.unit)return 'number ('+def.unit+')';
  if(def.date)return 'M DD YYYY';
- if(/year/.test(label))return 'XXXX';
+ if(/\bage\b/.test(label)&&/death|died|age at/.test(label))return 'age';
+ if(/\bdate(?:s)?\b|\bday of what year\b|\bname and date\b/.test(label))return /\bname and date\b/.test(label)?'name and date':/\btwo dates\b/.test(label)?'two dates':'date';
+ if(/\byear\b/.test(label))return 'XXXX';
  if(/street address/.test(label))return 'address number';
  if(def.transform?.kind==='alphabet')return 'letter';
- if(/month/.test(label))return 'month';
- if(/day|birthday|birth.date/.test(label))return 'day';
- const ph=String(def.ph||'');return ph&&!/enter|full|observation|number/i.test(ph)?ph:def.kind==='text'?'answer':'number';
+ if(/\bmonth\b/.test(label))return 'month';
+ if(/\bday\b|birthday|birth-day/.test(label))return 'day';
+ if(steps.some(x=>x.op==='letters'))return /middle name/.test(label)?'middle name':/last name/.test(label)?'last name':'word or name';
+ const characterCount=steps.find(x=>x.op==='count');
+ if(characterCount)return /[0-9]/.test(characterCount.char)?'full number':'text to count';
+ if(/number of letters|how many letters/.test(label))return 'number of letters';
+ if(/coordinates|latitude|longitude/.test(label) && !/calculate|count|year/.test(label))return 'N … W …';
+ if(def.type==='choice')return 'selected option';
+ if(/why|explain|compare|difference|purpose|reason|how.*(?:linked|connected)/.test(label))return 'explanation';
+ if(/describe|description|arrangement/.test(label))return 'description';
+ if(/how many|number of|count|total/.test(label))return 'count';
+ if(/height|width|length|distance|thickness|size|measure|how big|elevation|depth/.test(label))return 'measurement';
+ if(def.type==='number'&&/letters/.test(label))return 'number of letters';
+ if(def.type==='number'&&/words/.test(label))return 'number of words';
+ if(def.type==='number')return 'number';
+ if(/color|colour/.test(label))return 'color';
+ if(/intersection/.test(label))return 'street intersection';
+ if(/quotation|quote|sentence|transcribe/.test(label))return /sentence/.test(label)?'sentence':'quotation';
+ if(/five unknowns|five numbers/.test(label))return 'five numbers';
+ if(/suspectweaponroom/.test(label))return 'SUSPECTWEAPONROOM';
+ if(/no spaces|without spaces/.test(label))return 'text without spaces';
+ if(/three words/.test(label))return 'three words';
+ if(/three letters/.test(label))return 'three letters';
+ if(/memorial.*name|name.*memorial/.test(label))return 'memorial name';
+ if(/name|who|whom|person/.test(label))return 'name';
+ if(/occupation|profession/.test(label))return 'occupation';
+ if(/animal/.test(label))return 'animal';
+ if(/shape/.test(label))return 'shape';
+ if(/type of (?:rock|stone)|kind of rock/.test(label))return 'rock type';
+ if(/words?/.test(label))return 'word or text';
+ if(def.type==='number'||def.num||def.L)return 'number';
+ return 'observations';
 }
+function observationPlaceholder(def){return expectedInputPlaceholder(def);}
 function inputVals(def, v) {
   if(def.transform)return rawCalculation(def,v).values;
   v = String(v ?? '').trim(); const o = {};
@@ -1650,7 +1687,7 @@ function prepareOwnerReporting(c){
 function ownerStageFormHTML(code){
  const stages=(C(code).stages||[]).filter(stage=>isOwnerAnswerStage(C(code),stage));
  if(!stages.length)return '';
- return `<section class="owner-verification"><h3>Verification questions for the owner</h3><p class="note">Fill these at the final location, then use Copy answers and send the message to the cache owner.</p>${stages.map(stage=>(stage.inputs||[]).map((def,j)=>`<label class="slab">${esc(def.l)}<textarea class="ans" rows="2" data-sin="${code}|${stage.id}|${j}" placeholder="Your answer">${esc(prog(code).st?.[stage.id]?.in?.[j]||'')}</textarea></label>`).join('')).join('')}</section>`;
+ return `<section class="owner-verification"><h3>Verification questions for the owner</h3><p class="note">Fill these at the final location, then use Copy answers and send the message to the cache owner.</p>${stages.map(stage=>(stage.inputs||[]).map((def,j)=>`<label class="slab">${esc(def.l)}<textarea class="ans" rows="2" data-sin="${code}|${stage.id}|${j}" placeholder="${esc(expectedInputPlaceholder(def))}">${esc(prog(code).st?.[stage.id]?.in?.[j]||'')}</textarea></label>`).join('')).join('')}</section>`;
 }
 function ownerStageAnswers(code) {
   const c=C(code);return (c?.stages||[]).filter(stage=>isOwnerAnswerStage(c,stage)).flatMap(stage=>(stage.inputs||[]).map((def,i)=>({label:def.l,value:String(prog(code).st?.[stage.id]?.in?.[i]??'').trim()})));
@@ -1685,9 +1722,9 @@ function taskHTML(code, q, i) {
   const detail = [q.location ? `<b>Where:</b> ${esc(q.location)}` : '', q.context ? esc(q.context) : '', q.instructions && q.instructions !== q.prompt ? esc(q.instructions) : ''].filter(Boolean).join('<br>');
   let answer = '';
   if (q.type === 'image') { const n = (C(code).images || []).filter(im => im.qid === q.id).length; answer = `<div class="photoanswer"><label class="btn sm pri">Open camera / choose photo<input type="file" accept="image/*" capture="user" hidden data-qphoto="${code}|${q.id}"></label><small>${n ? `${n} photo${n > 1 ? 's' : ''} attached · ` : ''}On iPhone this requests the front-facing camera when the browser supports it. Exported answer: “Photo will be attached to log!”</small></div>`; }
-  else if ((q.answerFields || []).length) { const obj = a && typeof a === 'object' ? a : {}; answer = `<div class="grid">${q.answerFields.map(f => `<label>${esc(f.label)}<input type="${f.type === 'number' ? 'number' : 'text'}" data-afield="${code}|${q.id}|${f.id}" placeholder="${esc(f.placeholder || f.unit || 'Your answer')}" value="${esc(obj[f.id] || '')}"></label>`).join('')}</div>`; }
+  else if ((q.answerFields || []).length) { const obj = a && typeof a === 'object' ? a : {}; answer = `<div class="grid">${q.answerFields.map(f => `<label>${esc(f.label)}<input type="${f.type === 'number' ? 'number' : 'text'}" data-afield="${code}|${q.id}|${f.id}" placeholder="${esc(expectedInputPlaceholder(f,q.prompt||q.title||''))}" value="${esc(obj[f.id] || '')}"></label>`).join('')}</div>`; }
   else if (q.type === 'confirmation') answer = `<label class="chk"><input type="checkbox" data-acheck="${code}|${q.id}" ${a ? 'checked' : ''}> Confirmed</label>`;
-  else answer = `<textarea class="ans" data-ans="${code}|${q.id}" rows="${q.type === 'textarea' ? 3 : 1}" placeholder="Your answer">${esc(typeof a === 'string' ? a : '')}</textarea>`;
+  else answer = `<textarea class="ans" data-ans="${code}|${q.id}" rows="${q.type === 'textarea' ? 3 : 1}" placeholder="${esc(expectedInputPlaceholder(q))}">${esc(typeof a === 'string' ? a : '')}</textarea>`;
   return `<div class="task"><div class="q"><span class="n">${esc(qnum(q, i))}</span><span class="qt">${esc(q.title || q.prompt || 'Photo task')}</span>
     <button class="pen ${on ? 'on' : ''}" data-act="editq" data-code="${code}" data-qid="${q.id}" aria-label="${on ? 'Finish editing question' : 'Edit question'}" title="${on ? 'Finish editing' : 'Edit question'}">${on ? CHECK : PEN}</button></div>${q.title && q.prompt ? `<div class="qdetail">${esc(q.prompt)}</div>` : ''}${detail ? `<div class="qdetail">${detail}</div>` : ''}${opts}${edit}${answer}</div>`;
 }
@@ -1757,7 +1794,7 @@ function stageHTML(code, s, i, cur) {
     ${EDITMD[code + '|' + s.id] ? mdField(code, s.id, 'desc', s.desc || '', 4, 'Text') : (s.desc && !s.inputs.some(d=>d.l.trim()===s.desc.trim()) ? `<div class="desc md">${renderMd(s.desc)}</div>` : '')}
     ${(s.choices || []).length ? `<div class="choices">${s.choices.map(ch => `<label class="choice"><input type="radio" name="choice-${code}-${s.id}" data-schoice="${code}|${s.id}" value="${esc(ch.id)}" ${((st.in || {})._choice === ch.id) ? 'checked' : ''}><span><b>${esc(ch.label)}</b>${ch.note ? `<small>${esc(ch.note)}</small>` : ''}</span></label>`).join('')}</div>` : ''}
     ${i===0 && C(code).extra?.coords_corrected && (!s.coords || s.coords===C(code).coords) ? `<label>Original first-stage coordinates<input data-soriginal="${code}|${s.id}" value="${esc(st.original||'')}" placeholder="N … W … from original listing"></label>`:''}
-    ${s.inputs.length && !(isOwnerAnswerStage(C(code),s)) ? `<div class="grid">${s.inputs.map((d, j) => `<div><span class="sprompt" contenteditable="true" role="textbox" aria-label="Edit prompt for ${esc(d.L || 'field ' + (j + 1))}" data-slabel="${code}|${s.id}|${j}">${esc(d.l || ('Value of ' + d.L))}</span><input style="${['observations','derived'].includes(d.transform?.kind)?'display:none':''}" inputmode="${d.kind === 'text' || d.transform?.kind==='alphabet' ? 'text' : 'decimal'}" data-sin="${code}|${s.id}|${j}" aria-label="Answer for ${esc(d.L || d.l)}" placeholder="${esc(observationPlaceholder(d))}" value="${esc(typeof st.in?.[j]==='object'?st.in[j].value||'':st.in?.[j]||'')}">${d.transform?.kind==='observations'?d.transform.labels.map((label,k)=>`<label>${esc(label)}<input data-rawpart="${code}|${s.id}|${j}|${k}" value="${esc(st.in?.[j]?.[k]||'')}" inputmode="decimal"></label>`).join(''):''}${d.transform?.steps?.some(step=>step.op==='chooseDigit')?`<label>Which digit? (source is ambiguous)<select data-rawpart="${code}|${s.id}|${j}|position"><option value="">Choose if more than one digit</option>${[1,2].map(k=>`<option value="${k}" ${st.in?.[j]?.position==k?'selected':''}>Digit ${k}</option>`).join('')}</select></label>`:''}${d.transform?'<small class="calculation-hint">Calculated automatically</small>':''}${d.L?`<small data-derived="${code}|${s.id}|${j}"></small>`:''}</div>`).join('')}</div>` : ''}
+    ${s.inputs.length && !(isOwnerAnswerStage(C(code),s)) ? `<div class="grid">${s.inputs.map((d, j) => `<div><span class="sprompt" contenteditable="true" role="textbox" aria-label="Edit prompt for ${esc(d.L || 'field ' + (j + 1))}" data-slabel="${code}|${s.id}|${j}">${esc(d.l || ('Value of ' + d.L))}</span><input style="${['observations','derived'].includes(d.transform?.kind)?'display:none':''}" inputmode="${d.kind === 'text' || d.transform?.kind==='alphabet' ? 'text' : 'decimal'}" data-sin="${code}|${s.id}|${j}" aria-label="Answer for ${esc(d.L || d.l)}" placeholder="${esc(observationPlaceholder(d))}" value="${esc(typeof st.in?.[j]==='object'?st.in[j].value||'':st.in?.[j]||'')}">${d.transform?.kind==='observations'?d.transform.labels.map((label,k)=>`<label>${esc(label)}<input data-rawpart="${code}|${s.id}|${j}|${k}" placeholder="${esc(expectedInputPlaceholder({label,type:'number'}))}" value="${esc(st.in?.[j]?.[k]||'')}" inputmode="decimal"></label>`).join(''):''}${d.transform?.steps?.some(step=>step.op==='chooseDigit')?`<label>Which digit? (source is ambiguous)<select data-rawpart="${code}|${s.id}|${j}|position"><option value="">Choose if more than one digit</option>${[1,2].map(k=>`<option value="${k}" ${st.in?.[j]?.position==k?'selected':''}>Digit ${k}</option>`).join('')}</select></label>`:''}${d.transform?'<small class="calculation-hint">Calculated automatically</small>':''}${d.L?`<small data-derived="${code}|${s.id}|${j}"></small>`:''}</div>`).join('')}</div>` : ''}
     ${s.offset?.base==='manual' ? `<label>Original posted coordinates (saved cache coordinates are corrected)<input data-sbase="${code}|${s.id}" value="${esc(st.base||'')}" placeholder="Enter original N … W … from listing"></label>` : ''}
     ${s.manual_coords ? `<label>Coordinates returned by checker / found on site<input data-sresolved="${code}|${s.id}" value="${esc(st.solved||'')}" placeholder="N 38° … W 077° …"></label>` : ''}
     <div id="seq-${code}-${s.id}"></div><div class="res" id="sres-${code}-${s.id}"></div>
