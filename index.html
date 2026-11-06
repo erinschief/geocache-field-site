@@ -335,6 +335,7 @@ details.menu[open]>summary{color:var(--text)}
   100%{opacity:1;transform:translate(-50%,0) rotate(0deg) scale(1)}
 }
 @media(prefers-reduced-motion:reduce){.toast{animation:none}}
+.nu{padding:8px 10px;margin:6px 0}.nu .btns,.savedfinal .btns{gap:7px;align-items:center;margin:6px 0 0}.nu .btn,.savedfinal .btn{min-height:36px;padding:6px 10px;font-size:13px;line-height:1.2}.nu small{font-size:13px;line-height:1.35}.calculation-hint,[data-derived]{display:block;margin-top:4px;font-size:12px;line-height:1.4;color:var(--muted)}[data-derived]:empty{display:none}
 </style>
 </head>
 <body>
@@ -824,6 +825,17 @@ function applyRawLayout(c){
   Object.assign(def,structuredClone(spec));
  }c.raw_input_version=1;return changed;
 }
+function observationPlaceholder(def){
+ const label=String(def.l||'').toLowerCase();
+ if(/\bage\b/.test(label)&&/death|died|age at/.test(label))return 'age';
+ if(def.date)return 'M DD YYYY';
+ if(/year/.test(label))return 'XXXX';
+ if(/street address/.test(label))return 'address number';
+ if(def.transform?.kind==='alphabet')return 'letter';
+ if(/month/.test(label))return 'month';
+ if(/day|birthday|birth.date/.test(label))return 'day';
+ const ph=String(def.ph||'');return ph&&!/enter|full|observation|number/i.test(ph)?ph:def.kind==='text'?'answer':'number';
+}
 function inputVals(def, v) {
   if(def.transform)return rawCalculation(def,v).values;
   v = String(v ?? '').trim(); const o = {};
@@ -945,7 +957,7 @@ function stageMissingAnswers(code,sid) {
 }
 function updateStageCompletion(code,sid) {
   const checkbox=document.querySelector(`[data-sdone="${code}|${sid}"]`);if(!checkbox)return;
-  document.querySelectorAll(`[data-derived^="${code}|${sid}|"]`).forEach(el=>{const i=+el.dataset.derived.split('|')[2],def=C(code).stages.find(s=>s.id===sid).inputs[i];el.textContent=def.transform?rawCalculation(def,prog(code).st?.[sid]?.in?.[i],stageValues(code,sid).values).trace:Object.entries(inputVals(def,prog(code).st?.[sid]?.in?.[i])).map(([k,v])=>k+' = '+v).join(', ');});
+  document.querySelectorAll(`[data-derived^="${code}|${sid}|"]`).forEach(el=>{const i=+el.dataset.derived.split('|')[2],def=C(code).stages.find(s=>s.id===sid).inputs[i];el.textContent=def.transform?rawCalculation(def,prog(code).st?.[sid]?.in?.[i],stageValues(code,sid).values).trace:Object.entries(inputVals(def,prog(code).st?.[sid]?.in?.[i])).map(([k,v])=>k+' = '+v).join(', ');if(/^Enter (the full|each raw)/.test(el.textContent))el.textContent='';});
   const missing=stageMissingAnswers(code,sid),done=!!prog(code).st?.[sid]?.done;
   checkbox.disabled=false;checkbox.setAttribute('aria-disabled',String(!done && missing.length>0 && !allowEarlierCompletion(code)));
   const label=checkbox.closest('.stagecomplete'),message=label?.querySelector('.stagemsg small');
@@ -1745,7 +1757,7 @@ function stageHTML(code, s, i, cur) {
     ${EDITMD[code + '|' + s.id] ? mdField(code, s.id, 'desc', s.desc || '', 4, 'Text') : (s.desc && !s.inputs.some(d=>d.l.trim()===s.desc.trim()) ? `<div class="desc md">${renderMd(s.desc)}</div>` : '')}
     ${(s.choices || []).length ? `<div class="choices">${s.choices.map(ch => `<label class="choice"><input type="radio" name="choice-${code}-${s.id}" data-schoice="${code}|${s.id}" value="${esc(ch.id)}" ${((st.in || {})._choice === ch.id) ? 'checked' : ''}><span><b>${esc(ch.label)}</b>${ch.note ? `<small>${esc(ch.note)}</small>` : ''}</span></label>`).join('')}</div>` : ''}
     ${i===0 && C(code).extra?.coords_corrected && (!s.coords || s.coords===C(code).coords) ? `<label>Original first-stage coordinates<input data-soriginal="${code}|${s.id}" value="${esc(st.original||'')}" placeholder="N … W … from original listing"></label>`:''}
-    ${s.inputs.length && !(isOwnerAnswerStage(C(code),s)) ? `<div class="grid">${s.inputs.map((d, j) => `<div><span class="sprompt" contenteditable="true" role="textbox" aria-label="Edit prompt for ${esc(d.L || 'field ' + (j + 1))}" data-slabel="${code}|${s.id}|${j}">${esc(d.l || ('Value of ' + d.L))}</span><input style="${['observations','derived'].includes(d.transform?.kind)?'display:none':''}" inputmode="${d.kind === 'text' || d.transform?.kind==='alphabet' ? 'text' : 'decimal'}" data-sin="${code}|${s.id}|${j}" aria-label="Answer for ${esc(d.L || d.l)}" placeholder="${esc(d.ph || (d.kind === 'text' ? 'Enter what you found' : d.date ? 'M DD YYYY' : d.num ? 'number' : 'YYYY'))}" value="${esc(typeof st.in?.[j]==='object'?st.in[j].value||'':st.in?.[j]||'')}">${d.transform?.kind==='observations'?d.transform.labels.map((label,k)=>`<label>${esc(label)}<input data-rawpart="${code}|${s.id}|${j}|${k}" value="${esc(st.in?.[j]?.[k]||'')}" inputmode="decimal"></label>`).join(''):''}${d.transform?.steps?.some(step=>step.op==='chooseDigit')?`<label>Which digit? (source is ambiguous)<select data-rawpart="${code}|${s.id}|${j}|position"><option value="">Choose if more than one digit</option>${[1,2].map(k=>`<option value="${k}" ${st.in?.[j]?.position==k?'selected':''}>Digit ${k}</option>`).join('')}</select></label>`:''}${d.transform?'<small>Enter the original observation; calculation is automatic.</small>':''}${d.L?`<small data-derived="${code}|${s.id}|${j}"></small>`:''}</div>`).join('')}</div>` : ''}
+    ${s.inputs.length && !(isOwnerAnswerStage(C(code),s)) ? `<div class="grid">${s.inputs.map((d, j) => `<div><span class="sprompt" contenteditable="true" role="textbox" aria-label="Edit prompt for ${esc(d.L || 'field ' + (j + 1))}" data-slabel="${code}|${s.id}|${j}">${esc(d.l || ('Value of ' + d.L))}</span><input style="${['observations','derived'].includes(d.transform?.kind)?'display:none':''}" inputmode="${d.kind === 'text' || d.transform?.kind==='alphabet' ? 'text' : 'decimal'}" data-sin="${code}|${s.id}|${j}" aria-label="Answer for ${esc(d.L || d.l)}" placeholder="${esc(observationPlaceholder(d))}" value="${esc(typeof st.in?.[j]==='object'?st.in[j].value||'':st.in?.[j]||'')}">${d.transform?.kind==='observations'?d.transform.labels.map((label,k)=>`<label>${esc(label)}<input data-rawpart="${code}|${s.id}|${j}|${k}" value="${esc(st.in?.[j]?.[k]||'')}" inputmode="decimal"></label>`).join(''):''}${d.transform?.steps?.some(step=>step.op==='chooseDigit')?`<label>Which digit? (source is ambiguous)<select data-rawpart="${code}|${s.id}|${j}|position"><option value="">Choose if more than one digit</option>${[1,2].map(k=>`<option value="${k}" ${st.in?.[j]?.position==k?'selected':''}>Digit ${k}</option>`).join('')}</select></label>`:''}${d.transform?'<small class="calculation-hint">Calculated automatically</small>':''}${d.L?`<small data-derived="${code}|${s.id}|${j}"></small>`:''}</div>`).join('')}</div>` : ''}
     ${s.offset?.base==='manual' ? `<label>Original posted coordinates (saved cache coordinates are corrected)<input data-sbase="${code}|${s.id}" value="${esc(st.base||'')}" placeholder="Enter original N … W … from listing"></label>` : ''}
     ${s.manual_coords ? `<label>Coordinates returned by checker / found on site<input data-sresolved="${code}|${s.id}" value="${esc(st.solved||'')}" placeholder="N 38° … W 077° …"></label>` : ''}
     <div id="seq-${code}-${s.id}"></div><div class="res" id="sres-${code}-${s.id}"></div>
