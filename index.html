@@ -378,8 +378,14 @@ let DB = (() => {
     if (r && r.v === 2) { const f = freshDB(); return Object.assign(f, r, {ui: Object.assign(f.ui, r.ui || {})}); } } catch (e) {}
   return freshDB();
 })();
-let STORAGE_ERROR = '';
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(DB)); STORAGE_ERROR = ''; document.getElementById('storage-warning')?.remove(); return true; } catch (e) {
+let STORAGE_ERROR = '', saveTimer = null;
+// Keep edits live in memory, but avoid serializing the whole library per keystroke.
+function scheduleSave() { if (saveTimer == null) saveTimer = setTimeout(save, 200); }
+function flushSave() { if (saveTimer != null) save(); }
+addEventListener('pagehide', flushSave);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+document.addEventListener('focusout', flushSave);
+const save = () => { clearTimeout(saveTimer); saveTimer = null; try { localStorage.setItem(KEY, JSON.stringify(DB)); STORAGE_ERROR = ''; document.getElementById('storage-warning')?.remove(); return true; } catch (e) {
   STORAGE_ERROR = 'Changes are only in memory: browser storage is unavailable or full. Export everything now to keep your work.';
   let n = document.getElementById('storage-warning'); if (!n) { n = document.createElement('div'); n.id = 'storage-warning'; n.className = 'warnbox'; n.setAttribute('role', 'alert'); document.body.prepend(n); } n.textContent = STORAGE_ERROR; return false;
 } };
@@ -396,7 +402,7 @@ const EDIT = {};                       // transient: which question rows are in 
 function hav(a, b) {
   const R = 3958.8, r = Math.PI / 180, dp = (b[0] - a[0]) * r, dl = (b[1] - a[1]) * r;
   const h = Math.sin(dp / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dl / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
+  return 2 * R * Math.asin(Math.sqrt(Math.max(0, Math.min(1, h))));
 }
 function bearing(a, b) {
   const r = Math.PI / 180, p1 = a[0] * r, p2 = b[0] * r, dl = (b[1] - a[1]) * r;
@@ -410,12 +416,12 @@ const fmtDist = mi => mi < 0.1 ? `${Math.round(mi * 5280)} ft` : `${mi.toFixed(2
 function parseLoc(t) {
   t = String(t == null ? '' : t);
   let m = t.match(/([NS])\s*(\d{1,2})\D+?(\d+(?:\.\d+)?)\D*?\s*([EW])\s*(\d{1,3})\D+?(\d+(?:\.\d+)?)/i);
-  if (m) { let la = +m[2] + m[3] / 60, lo = +m[5] + m[6] / 60; if (/s/i.test(m[1])) la = -la; if (/w/i.test(m[4])) lo = -lo; return [la, lo]; }
-  m = t.match(/(-?\d{1,2}\.\d+)\s*[,;\s]\s*(-?\d{1,3}\.\d+)/);
-  return m ? [+m[1], +m[2]] : null;
+  if (m) { if (+m[3] >= 60 || +m[6] >= 60) return null; let la = +m[2] + m[3] / 60, lo = +m[5] + m[6] / 60; if (la > 90 || lo > 180) return null; if (/s/i.test(m[1])) la = -la; if (/w/i.test(m[4])) lo = -lo; return [la, lo]; }
+  m = t.match(/(?:^|[^\d.+-])(-?\d{1,3}\.\d+)\s*[,;\s]\s*(-?\d{1,3}\.\d+)(?![\d.])/);
+  return m && Math.abs(+m[1]) <= 90 && Math.abs(+m[2]) <= 180 ? [+m[1], +m[2]] : null;
 }
 function dmText(lat, lon) {
-  const f = (v, p, n) => { const a = Math.abs(v), d = Math.floor(a); return `${v >= 0 ? p : n} ${d}° ${((a - d) * 60).toFixed(3)}`; };
+  const f = (v, p, n) => { const minutes = Math.round(Math.abs(v) * 60000), d = Math.floor(minutes / 60000); return `${v >= 0 ? p : n} ${d}° ${((minutes % 60000) / 1000).toFixed(3)}`; };
   return f(lat, 'N', 'S') + ' ' + f(lon, 'E', 'W');
 }
 const DECL_VAL = () => (isFinite(+UI.decl) ? +UI.decl : -10.1);
@@ -708,10 +714,8 @@ const unlisted = code => !tripsOf(code).length;
 const NEARBY = {pos:null, orderPos:null, watch:null, high:false, error:'', requested:false};
 function nearbyOrder(codes) {
   const origin=NEARBY.orderPos;
-  return codes.slice().sort((a,b)=>{
-    const ca=cachePosition(a), cb=cachePosition(b), da=origin && ca.lat!=null && ca.lon!=null ? hav(origin,[ca.lat,ca.lon]) : Infinity, db=origin && cb.lat!=null && cb.lon!=null ? hav(origin,[cb.lat,cb.lon]) : Infinity;
-    return (da-db) || ca.name.localeCompare(cb.name) || a.localeCompare(b);
-  });
+  return codes.map(code=>{const c=cachePosition(code);return {code,name:c.name,distance:origin && c.lat!=null && c.lon!=null ? hav(origin,[c.lat,c.lon]) : Infinity};})
+    .sort((a,b)=>(a.distance-b.distance)||a.name.localeCompare(b.name)||a.code.localeCompare(b.code)).map(x=>x.code);
 }
 function distanceText(code) {
   const c=cachePosition(code); return NEARBY.pos && c?.lat!=null && c.lon!=null ? fmtDist(hav([NEARBY.pos.latitude,NEARBY.pos.longitude],[c.lat,c.lon]))+' away' : '';
@@ -917,8 +921,8 @@ function evalTpl(tpl, M) {
 /* "38.52.957" | "38 52.957" | "N 38° 52.957" | "38.52957" (decimal degrees) -> degrees */
 function coordNum(str) {
   const s = String(str).replace(/[NSEW°'"]/gi, ' ').replace(/\s+/g, ' ').trim();
-  let m = s.match(/^(\d+)\.(\d{1,2})\.(\d+)$/); if (m) return +m[1] + parseFloat(m[2] + '.' + m[3]) / 60;
-  m = s.match(/^(\d+) (\d+(?:\.\d+)?)$/); if (m) return +m[1] + parseFloat(m[2]) / 60;
+  let m = s.match(/^(\d+)\.(\d{1,2})\.(\d+)$/); if (m) return +m[2] < 60 ? +m[1] + parseFloat(m[2] + '.' + m[3]) / 60 : null;
+  m = s.match(/^(\d+) (\d+(?:\.\d+)?)$/); if (m) return +m[2] < 60 ? +m[1] + parseFloat(m[2]) / 60 : null;
   m = s.match(/^(\d+\.\d+)$/); if (m) return parseFloat(m[1]);
   return null;
 }
@@ -973,8 +977,8 @@ function stageMissingAnswers(code,sid) {
   if(!stage)return ['Stage unavailable'];
   (stage.inputs||[]).forEach((def,i)=>{
     if(def.transform?.kind==='derived')return;
-    const value=String(values[i]??'').trim();
-    if(!value || (def.kind!=='text' && def.L && !Object.keys(inputVals(def,value)).length))missing.push(def.l || def.L || 'Answer '+(i+1));
+    const raw=values[i], value=String(raw&&typeof raw==='object'?(raw.legacy??raw.value??''):raw??'').trim();
+    if(def.transform ? !Object.keys(inputVals(def,raw)).length : !value || (def.kind!=='text' && def.L && !Object.keys(inputVals(def,raw)).length))missing.push(def.l || def.L || 'Answer '+(i+1));
   });
   if(stage.choices?.length && !stage.choices.some(c=>c.id===values._choice))missing.push('Select an answer');
   if(stage.manual_coords && !parseLoc(state.solved))missing.push('Enter the returned / observed coordinates');
@@ -1007,8 +1011,9 @@ function remapStageInputs(code, oldStages, newStages) {
     const source=sameStage.length===1?sameStage[0]:across.length===1?across[0]:null;
     const target=p.st[stage.id] || (p.st[stage.id]={in:{},done:false});target.in=target.in||{};
     const originalDef=(oldStages||[]).find(s=>s.id===stage.id)?.inputs?.[j];
-    if(originalDef && same(def,originalDef))return; // Includes intentional blank values.
-    if(source)target.in[j]=source.value;
+    const preserveValue=(value,prior)=>def.transform && !prior.transform && value!=null && typeof value!=='object'?{legacy:value}:value;
+    if(originalDef && same(def,originalDef)){target.in[j]=preserveValue(target.in[j],originalDef);return;} // Includes intentional blank values.
+    if(source)target.in[j]=preserveValue(source.value,source.def);
     else if(originalDef)delete target.in[j]; // Prior value remains in input_history.
   });
 }
@@ -1181,7 +1186,7 @@ function onOrient(e) {
 }
 function startOrient(gesture) {
   if (NAV.oOn) return;
-  const hook = () => { NAV.oOn = true; NAV.oErr = ''; addEventListener('deviceorientationabsolute', onOrient, true); addEventListener('deviceorientation', onOrient, true); schedPaint(); };
+  const hook = () => { if (!NAV.target) return; NAV.oOn = true; NAV.oErr = ''; addEventListener('deviceorientationabsolute', onOrient, true); addEventListener('deviceorientation', onOrient, true); schedPaint(); };
   const DOE = window.DeviceOrientationEvent;
   if (!DOE) { NAV.oErr = 'No compass sensor available'; return; }
   if (typeof DOE.requestPermission === 'function') {
@@ -1191,7 +1196,7 @@ function startOrient(gesture) {
   } else hook();
 }
 function startGeo() { requestNearbyLocation(true); }
-function startWake() { try { if (navigator.wakeLock && !NAV.wake) navigator.wakeLock.request('screen').then(l => { NAV.wake = l; l.addEventListener('release', () => { NAV.wake = null; }); }).catch(() => {}); } catch (e) {} }
+function startWake() { try { if (navigator.wakeLock && !NAV.wake) navigator.wakeLock.request('screen').then(l => { if (!NAV.target || document.visibilityState === 'hidden') { l.release().catch(() => {}); return; } if (NAV.wake) { l.release().catch(() => {}); return; } NAV.wake = l; l.addEventListener('release', () => { NAV.wake = null; }); }).catch(() => {}); } catch (e) {} }
 function startNav(gesture) { startGeo(); startOrient(gesture); startWake(); }
 function stopNav() {
   clearInterval(NAV.timer); NAV.timer = 0;
@@ -1315,7 +1320,7 @@ function confetti(from) {
 }
 
 /* ================= images: blobs in IndexedDB, metadata in the cache record ================= */
-const IMG = {db: null, mem: {}, urls: {}};
+const IMG = {db: null, opening: null, mem: {}, urls: {}};
 function animateToast(t){
   if(matchMedia('(prefers-reduced-motion: reduce)').matches || !t.animate)return;
   // Approved floating prototype: 12px-ish overshoot, centered roll, ~0.96s settle.
@@ -1339,13 +1344,24 @@ function toast(msg,undo=null) {
   document.body.appendChild(t);animateToast(t);const dismiss=()=>{toastTimer=setTimeout(()=>t.remove(),undo?7000:3200);};dismiss();t.addEventListener('pointerenter',()=>clearTimeout(toastTimer));t.addEventListener('pointerleave',dismiss);t.addEventListener('focusin',()=>clearTimeout(toastTimer));t.addEventListener('focusout',dismiss);
 }
 function idb() {
-  return new Promise((res, rej) => {
-    if (IMG.db) return res(IMG.db);
-    try { const r = indexedDB.open('gfs2-img', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => { IMG.db = r.result; res(IMG.db); }; r.onerror = () => rej(r.error); } catch (e) { rej(e); }
-  });
+  if (IMG.db) return Promise.resolve(IMG.db);
+  if (IMG.opening) return IMG.opening;
+  IMG.opening = new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open('gfs2-img', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('img');
+      r.onsuccess = () => {
+        IMG.db = r.result;
+        IMG.db.onversionchange = () => { IMG.db.close(); IMG.db = null; IMG.opening = null; };
+        res(IMG.db);
+      };
+      r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  }).catch(e => { IMG.opening = null; throw e; });
+  return IMG.opening;
 }
 async function imgPut(id, blob) {
-  try { const db = await idb(); await new Promise((res, rej) => { const tx = db.transaction('img', 'readwrite'); tx.objectStore('img').put(blob, id); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+  try { const db = await idb(); await new Promise((res, rej) => { const tx = db.transaction('img', 'readwrite'); tx.objectStore('img').put(blob, id); tx.oncomplete = () => { delete IMG.mem[id]; res(); }; tx.onerror = tx.onabort = () => rej(tx.error || Error('Image transaction aborted')); }); }
   catch (e) { IMG.mem[id] = blob; if (!IMG.warned) { IMG.warned = true; toast('This browser can’t store images offline — they’ll vanish when you close the page. Export with images to keep them.'); } }
 }
 async function imgGet(id) {
@@ -1353,13 +1369,15 @@ async function imgGet(id) {
   try { const db = await idb(); return await new Promise((res, rej) => { const rq = db.transaction('img').objectStore('img').get(id); rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error); }); } catch (e) { return null; }
 }
 async function imgDel(id) {
+  if (Object.values(DB.caches).some(c=>(c.images||[]).some(im=>im.id===id)) || (DB.mediaArchive||[]).some(im=>im.id===id) || Object.values(DB.recovery||{}).some(versions=>versions.some(v=>(v.record?.images||[]).some(im=>im.id===id)))) return;
   delete IMG.mem[id]; if (IMG.urls[id]) { URL.revokeObjectURL(IMG.urls[id]); delete IMG.urls[id]; }
-  try { const db = await idb(); await new Promise(res => { const tx = db.transaction('img', 'readwrite'); tx.objectStore('img').delete(id); tx.oncomplete = res; tx.onerror = res; }); } catch (e) {}
+  try { const db = await idb(); await new Promise(res => { const tx = db.transaction('img', 'readwrite'); tx.objectStore('img').delete(id); tx.oncomplete = res; tx.onerror = tx.onabort = res; }); } catch (e) {}
 }
 async function imgURL(im) {
-  if (im.url && !IMG.urls[im.id] && !(await imgGet(im.id))) return im.url;
   if (IMG.urls[im.id]) return IMG.urls[im.id];
-  const b = await imgGet(im.id); return b ? (IMG.urls[im.id] = URL.createObjectURL(b)) : null;
+  const b = await imgGet(im.id);
+  if (IMG.urls[im.id]) return IMG.urls[im.id];
+  return b ? (IMG.urls[im.id] = URL.createObjectURL(b)) : im.url || null;
 }
 const blobToDataURL = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
 function dataURLToBlob(u) {
@@ -1370,13 +1388,14 @@ function dataURLToBlob(u) {
 }
 async function loadBitmap(blob) {
   if (window.createImageBitmap) { try { return await createImageBitmap(blob, {imageOrientation: 'from-image'}); } catch (e) {} }
-  return await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(blob); });
+  return await new Promise((res, rej) => { const i = new Image(), url = URL.createObjectURL(blob); i.onload = () => { URL.revokeObjectURL(url); res(i); }; i.onerror = e => { URL.revokeObjectURL(url); rej(e); }; i.src = url; });
 }
 async function prepImage(file, maxEdge) {              // downscale big photos/screenshots; keep the original if it's already smaller
   const bmp = await loadBitmap(file), w0 = bmp.width, h0 = bmp.height, sc = Math.min(1, (maxEdge || 2200) / Math.max(w0, h0));
   const w = Math.round(w0 * sc), h = Math.round(h0 * sc), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.drawImage(bmp, 0, 0, w, h);
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); try { g.drawImage(bmp, 0, 0, w, h); } finally { bmp.close?.(); }
   const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.86));
+  if (!blob) throw Error('Image conversion failed');
   return (sc === 1 && file.size <= blob.size) ? {blob: file, w, h} : {blob, w, h};
 }
 async function attachImages(code, files, meta) {
@@ -1392,8 +1411,8 @@ async function attachImages(code, files, meta) {
 async function rotateImage(code, i) {
   const im = C(code).images[i], b = await imgGet(im.id); if (!b) return;
   const bmp = await loadBitmap(b), cv = document.createElement('canvas'); cv.width = bmp.height; cv.height = bmp.width;
-  const g = cv.getContext('2d'); g.translate(cv.width, 0); g.rotate(Math.PI / 2); g.drawImage(bmp, 0, 0);
-  const nb = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.9)); await imgPut(im.id, nb);
+  const g = cv.getContext('2d'); g.translate(cv.width, 0); g.rotate(Math.PI / 2); try { g.drawImage(bmp, 0, 0); } finally { bmp.close?.(); }
+  const nb = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.9)); if (!nb) throw Error('Image conversion failed'); await imgPut(im.id, nb);
   if (IMG.urls[im.id]) { URL.revokeObjectURL(IMG.urls[im.id]); delete IMG.urls[im.id]; }
   delete im.url; [im.w, im.h] = [cv.width, cv.height]; save();
 }
@@ -1405,7 +1424,7 @@ async function saveOffline(code, i) {                  // best effort for linked
 function hydrateImages(root) {
   (root || document).querySelectorAll('img[data-imgid]').forEach(async el => {
     const code = el.closest('[data-code]') && el.closest('[data-code]').dataset.code, im = code && C(code) && (C(code).images || []).find(x => x.id === el.dataset.imgid);
-    if (!im) return; const u = await imgURL(im); if (u) el.src = u; else el.parentElement.classList.add('missing');
+    if (!im) return; const u = await imgURL(im); if (!el.isConnected) return; if (u) el.src = u; else el.parentElement?.classList.add('missing');
   });
 }
 async function buildSaveFull(scope, withImages) {
@@ -1429,9 +1448,10 @@ async function openViewer(code, i) {
     <input class="vwcap" id="vwcap" type="text" placeholder="Caption (e.g. trail map, stage 3 diagram)" value="${esc(im.caption || '')}"></div>`, true);
   $('#modal').classList.add('vwm');
   const img = document.getElementById('vwimg'), url = await imgURL(im);
+  if (!img.isConnected || VW.code !== code || VW.i !== i) return;
   if (!url) { document.getElementById('vwstage').innerHTML = '<div class="empty" style="color:#fff">This image isn’t on this device. Import a save that includes images, or attach it again.</div>'; return; }
   img.onload = () => { VW.nw = img.naturalWidth; VW.nh = img.naturalHeight; img.style.width = VW.nw + 'px'; img.style.height = VW.nh + 'px'; vwFit(); };
-  img.onerror = () => { document.getElementById('vwstage').innerHTML = '<div class="empty" style="color:#fff">Couldn’t load this image.</div>'; };
+  img.onerror = () => { if (!img.isConnected) return; document.getElementById('vwstage').innerHTML = '<div class="empty" style="color:#fff">Couldn’t load this image.</div>'; };
   img.src = url; bindViewer();
 }
 function vwApply() { const img = document.getElementById('vwimg'); if (img) img.style.transform = `translate(${VW.tx}px,${VW.ty}px) scale(${VW.s})`; }
@@ -1606,7 +1626,7 @@ function bindMapGestures() {
   }, {passive:false});
   svg.addEventListener('dblclick', e => { e.preventDefault(); PLANZOOM = 0; PLANPAN = {x:0,y:0}; renderPlan(); });
 }
-function routeMiles(codes) { const r = codes.map(c => DB.caches[c]).filter(c => c && c.lat != null); let m = 0; for (let i = 1; i < r.length; i++) m += hav([r[i - 1].lat, r[i - 1].lon], [r[i].lat, r[i].lon]); return m; }
+function routeMiles(codes) { const r = codes.map(cachePosition).filter(c => c && c.lat != null); let m = 0; for (let i = 1; i < r.length; i++) m += hav([r[i - 1].lat, r[i - 1].lon], [r[i].lat, r[i].lon]); return m; }
 function togglePlanCode(code) {
   if (planMode().coll) { PLANFOCUS = code; render(); return; }
   let t = planTrip();
@@ -1626,7 +1646,7 @@ function putCacheFirst(code) {
 }
 function deleteSavedCache(code) {
   const c = C(code); if (!c) return;
-  (c.images || []).forEach(im => imgDel(im.id)); delete DB.caches[code]; delete DB.prog[code]; DB.trips.forEach(t => { t.codes = t.codes.filter(x => x !== code); });
+  const images=c.images || []; delete DB.caches[code]; delete DB.prog[code]; images.forEach(im=>imgDel(im.id)); DB.trips.forEach(t => { t.codes = t.codes.filter(x => x !== code); });
   if (PLANFOCUS === code) PLANFOCUS = null; save(); render(); toast('Removed saved cache');
 }
 function planRow(code, i, kind) {            // kind: 'in' (in the list), 'out' (candidate), 'coll' (collection)
@@ -2241,7 +2261,7 @@ document.addEventListener('click', async e => {
     openModal(`<h2>Remove from library?</h2><p>“${esc(C(code).name)}” and its saved answers will be deleted from this browser. Export first if you want a copy.</p>
       <div class="btns"><button class="btn pri" data-act="confirm-remove" data-code="${code}" style="background:#c0392b;border-color:#c0392b">Remove</button><button class="btn" data-act="closemodal">Cancel</button></div>`); return;
   }
-  if (act === 'confirm-remove') { (C(code).images || []).forEach(im => imgDel(im.id)); delete DB.caches[code]; delete DB.prog[code]; DB.trips.forEach(t => { t.codes = t.codes.filter(c => c !== code); }); closeModal(); save(); render(); return; }
+  if (act === 'confirm-remove') { closeModal(); deleteSavedCache(code); return; }
   if (act === 'closemodal') { closeModal(); return; }
   if (act === 'compass') { openCompass(+el.dataset.lat, +el.dataset.lon, el.dataset.name); return; }
   if (act === 'closecompass') { closeCompass(); return; }
@@ -2257,7 +2277,7 @@ document.addEventListener('click', async e => {
   if (act === 'vsave') { await saveOffline(VW.code, VW.i); openViewer(VW.code, VW.i); return; }
   if (act === 'vdel') {
     if (ARMED !== 'vdel') { ARMED = 'vdel'; el.dataset.confirm='1';el.setAttribute('aria-label','Confirm delete image');el.title='Tap again to delete';toast('Tap the delete icon again to delete this image'); setTimeout(() => { ARMED = ''; if (el.isConnected) {delete el.dataset.confirm;el.setAttribute('aria-label','Delete image');el.title='Delete image';} }, 3000); return; }
-    ARMED = ''; const c = C(VW.code), im = c.images[VW.i]; await imgDel(im.id); c.images.splice(VW.i, 1); save();
+    ARMED = ''; const c = C(VW.code), im = c.images[VW.i]; c.images.splice(VW.i, 1); await imgDel(im.id); save();
     if (c.images.length) openViewer(VW.code, Math.min(VW.i, c.images.length - 1)); else { closeModal(); $('#modal').classList.remove('vwm'); rerenderCard(VW.code); } return;
   }
   if (act === 'exp-dl' || act === 'exp-copy' || act === 'exp-all') {
@@ -2321,25 +2341,25 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('input', e => {
   const t = e.target, d = t.dataset;
-  if (d.mdf) { const [c, sid, f] = d.mdf.split('|'); if (sid === '_') { PR(c).notes = t.value; t.previousElementSibling.innerHTML = mdMarkup(t.value); autogrow(t); save(); return; } const st = C(c).stages.find(x => x.id === sid); if (st) { st[f] = f === 'note' ? t.value.replace(/\n/g, ' ') : t.value; if (f === 'note' && t.value !== st[f]) t.value = st[f]; t.previousElementSibling.innerHTML = mdMarkup(t.value); autogrow(t); save(); } return; }
-  if (t.id === 'vwcap') { const im = C(VW.code).images[VW.i]; if (im) { im.caption = t.value; save(); } return; }
-  if (d.ans) { const [c, q] = d.ans.split('|'); PR(c).ans[q] = t.value; autogrow(t); save(); refreshCard(c); return; }
-  if (d.qprompt) { const [c, q] = d.qprompt.split('|'), qq = C(c).questions.find(x => x.id === q); if (qq) { qq.prompt = t.value; const qt = t.closest('.task').querySelector('.qt'); if (qt) qt.textContent = t.value; save(); refreshCard(c); } return; }
-  if (d.qfield) { const [c, q, f] = d.qfield.split('|'), qq = C(c).questions.find(x => x.id === q); if (qq) { qq[f] = t.value; save(); refreshCard(c); } return; }
-  if (d.qtype) { const [c, q] = d.qtype.split('|'), qq = C(c).questions.find(x => x.id === q); if (qq) { qq.type = t.value; save(); rerenderCard(c); } return; }
-  if (d.afield) { const [c, q, f] = d.afield.split('|'), p = PR(c); if (!p.ans[q] || typeof p.ans[q] !== 'object') p.ans[q] = {}; p.ans[q][f] = t.value; save(); refreshCard(c); return; }
-  if (d.qnum) { const [c, q] = d.qnum.split('|'), qq = C(c).questions.find(x => x.id === q); if (qq) { qq.n = t.value.trim().replace(/[.):]+$/, ''); const n = t.closest('.task').querySelector('.n'); if (n) n.textContent = qq.n || ''; save(); refreshCard(c); } return; }
-  if(d.soriginal){const [code,sid]=d.soriginal.split('|');const p=PR(code);p.st[sid]=p.st[sid]||{in:{},done:false};p.st[sid].original=t.value;save();refreshStageResults(code);return;}
-  if(d.sbase){const [code,sid]=d.sbase.split('|');const p=PR(code);p.st[sid]=p.st[sid]||{in:{},done:false};p.st[sid].base=t.value;save();refreshStageResults(code);return;}
-  if(d.sresolved){const [code,sid]=d.sresolved.split('|');const p=PR(code);p.st[sid]=p.st[sid]||{in:{},done:false};p.st[sid].solved=t.value;save();refreshStageResults(code);return;}
-  if(d.finalLocation){const code=d.finalLocation;if(scrapedFinal(code))return;const p=PR(code);p.solved=t.value;p.finalReviewed=true;p.solved_source='Entered final coordinates';save();refreshSavedFinal(code);refreshNearbyLabels();refreshHeader();return;}
-  if(d.rawpart){const [code,sid,j,key]=d.rawpart.split('|'),p=PR(code);const state=p.st[sid]||(p.st[sid]={in:{},done:false});const old=state.in[j];state.in[j]=old&&typeof old==='object'?{...old}:{};delete state.in[j].legacy;state.in[j][key]=t.value;save();refreshStageResults(code);return;}
-  if (d.sin) { const [c, s, j] = d.sin.split('|'), p = PR(c), st = p.st[s] || (p.st[s] = {in: {}, done: false}); if(st.in[j]&&typeof st.in[j]==='object'&&st.in[j].position)st.in[j]={value:t.value,position:st.in[j].position};else st.in[j]=t.value; save(); refreshStageResults(c); return; }
-  if (d.solved) { PR(d.solved).solved = t.value; save(); updPuzzle(d.solved); return; }
-  if (d.notes) { PR(d.notes).notes = t.value; autogrow(t); save(); return; }
-  if (t.id === 'decl') { UI.decl = parseFloat(t.value); save(); schedPaint(); return; }
-  if (t.id === 'impnew') { UI.importNew = t.value; save(); }
-  if (t.id === 'impemoji') { const g1 = firstGrapheme(t.value); if (t.value !== g1) t.value = g1; UI.importEmoji = g1; save(); }
+  if (d.mdf) { const [c, sid, f] = d.mdf.split('|'); if (sid === '_') { PR(c).notes = t.value; t.previousElementSibling.innerHTML = mdMarkup(t.value); autogrow(t); scheduleSave(); return; } const st = C(c).stages.find(x => x.id === sid); if (st) { st[f] = f === 'note' ? t.value.replace(/\n/g, ' ') : t.value; if (f === 'note' && t.value !== st[f]) t.value = st[f]; t.previousElementSibling.innerHTML = mdMarkup(t.value); autogrow(t); scheduleSave(); } return; }
+  if (t.id === 'vwcap') { const im = C(VW.code).images[VW.i]; if (im) { im.caption = t.value; scheduleSave(); } return; }
+  if (d.ans) { const [c, q] = d.ans.split('|'); PR(c).ans[q] = t.value; autogrow(t); scheduleSave(); refreshCard(c); return; }
+  if (d.qprompt) { const [c, q] = d.qprompt.split('|'), qq = C(c).questions.find(x => x.id === q); if (qq) { qq.prompt = t.value; const qt = t.closest('.task').querySelector('.qt'); if (qt) qt.textContent = t.value; scheduleSave(); refreshCard(c); } return; }
+  if (d.qfield) { const [c, q, f] = d.qfield.split('|'), qq = C(c).questions.find(x => x.id === q); if (qq) { qq[f] = t.value; scheduleSave(); refreshCard(c); } return; }
+  if (d.qtype) { const [c, q] = d.qtype.split('|'), qq = C(c).questions.find(x => x.id === q); if (qq) { qq.type = t.value; scheduleSave(); rerenderCard(c); } return; }
+  if (d.afield) { const [c, q, f] = d.afield.split('|'), p = PR(c); if (!p.ans[q] || typeof p.ans[q] !== 'object') p.ans[q] = {}; p.ans[q][f] = t.value; scheduleSave(); refreshCard(c); return; }
+  if (d.qnum) { const [c, q] = d.qnum.split('|'), qq = C(c).questions.find(x => x.id === q); if (qq) { qq.n = t.value.trim().replace(/[.):]+$/, ''); const n = t.closest('.task').querySelector('.n'); if (n) n.textContent = qq.n || ''; scheduleSave(); refreshCard(c); } return; }
+  if(d.soriginal){const [code,sid]=d.soriginal.split('|');const p=PR(code);p.st[sid]=p.st[sid]||{in:{},done:false};p.st[sid].original=t.value;scheduleSave();refreshStageResults(code);return;}
+  if(d.sbase){const [code,sid]=d.sbase.split('|');const p=PR(code);p.st[sid]=p.st[sid]||{in:{},done:false};p.st[sid].base=t.value;scheduleSave();refreshStageResults(code);return;}
+  if(d.sresolved){const [code,sid]=d.sresolved.split('|');const p=PR(code);p.st[sid]=p.st[sid]||{in:{},done:false};p.st[sid].solved=t.value;scheduleSave();refreshStageResults(code);return;}
+  if(d.finalLocation){const code=d.finalLocation;if(scrapedFinal(code))return;const p=PR(code);p.solved=t.value;p.finalReviewed=true;p.solved_source='Entered final coordinates';scheduleSave();refreshSavedFinal(code);refreshNearbyLabels();refreshHeader();return;}
+  if(d.rawpart){const [code,sid,j,key]=d.rawpart.split('|'),p=PR(code);const state=p.st[sid]||(p.st[sid]={in:{},done:false});const old=state.in[j];state.in[j]=old&&typeof old==='object'?{...old}:{};delete state.in[j].legacy;state.in[j][key]=t.value;scheduleSave();refreshStageResults(code);return;}
+  if (d.sin) { const [c, s, j] = d.sin.split('|'), p = PR(c), st = p.st[s] || (p.st[s] = {in: {}, done: false}); if(st.in[j]&&typeof st.in[j]==='object'&&st.in[j].position)st.in[j]={value:t.value,position:st.in[j].position};else st.in[j]=t.value; scheduleSave(); refreshStageResults(c); return; }
+  if (d.solved) { PR(d.solved).solved = t.value; scheduleSave(); updPuzzle(d.solved); return; }
+  if (d.notes) { PR(d.notes).notes = t.value; autogrow(t); scheduleSave(); return; }
+  if (t.id === 'decl') { UI.decl = parseFloat(t.value); scheduleSave(); schedPaint(); return; }
+  if (t.id === 'impnew') { UI.importNew = t.value; scheduleSave(); }
+  if (t.id === 'impemoji') { const g1 = firstGrapheme(t.value); if (t.value !== g1) t.value = g1; UI.importEmoji = g1; scheduleSave(); }
   if (t.id === 'temoji') { const g1 = firstGrapheme(t.value); if (t.value !== g1) t.value = g1; }
 });
 document.addEventListener('change', async e => {
@@ -3284,9 +3304,9 @@ const RAW_INPUT_SPECS={
 };
 let migratedStages=false;
 for(const c of Object.values(DB.caches))if(prepareOwnerReporting(c))migratedStages=true;
+for(const c of Object.values(DB.caches)){const previous=structuredClone(c.stages||[]);if(upgradeStageLayout(c)){remapStageInputs(c.code,previous,c.stages);migratedStages=true;}}
 for(const c of Object.values(DB.caches))if(applyRawLayout(c))migratedStages=true;
 for(const code of Object.keys(DB.caches))if(recognizeFinal(code))migratedStages=true;
-for(const c of Object.values(DB.caches)){const previous=structuredClone(c.stages||[]);if(upgradeStageLayout(c)){remapStageInputs(c.code,previous,c.stages);migratedStages=true;}}
 if(migratedStages)save();
 const repaintMapTheme=()=>{if(UI.tab==='plan')renderPlan();};
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',repaintMapTheme);
@@ -3297,3 +3317,4 @@ requestNearbyLocation();
 </script>
 </body>
 </html>
+
