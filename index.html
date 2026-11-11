@@ -486,7 +486,7 @@ function normWaypoints(arr) {
   return arr.map(w => {
     if (typeof w === 'string') w = {text: w};
     if (!w || typeof w !== 'object') return null;
-    const o = {prefix: String(w.prefix || ''), name: String(w.name || ''), type: String(w.type || ''), code: String(w.code || w.lookup || ''), note: String(w.note || ''), text: String(w.text || '')};
+    const o = {...w, prefix: String(w.prefix || ''), name: String(w.name || ''), type: String(w.type || ''), code: String(w.code || w.lookup || ''), note: String(w.note || w.description || ''), text: String(w.text || '')};
     let lat = typeof w.lat === 'number' ? w.lat : null, lon = typeof w.lon === 'number' ? w.lon : null;
     if (lat == null || lon == null) { const p = parseLoc(String(w.coords || w.coordinates || o.text)); if (p) { lat = p[0]; lon = p[1]; } }
     o.lat = lat; o.lon = lon; if (w.stage != null && w.stage !== '') o.stage = String(w.stage);
@@ -550,7 +550,7 @@ function mergeRecord(old, inc) {
   const out = Object.assign({}, old);
   if (old.extra || inc.extra) out.extra = Object.assign({}, old.extra, inc.extra);
   if ((old.images || []).length || (inc.images || []).length) { const m = new Map(); (old.images || []).concat(inc.images || []).forEach(im => m.set(im.id, Object.assign({}, m.get(im.id), im))); out.images = [...m.values()]; }
-  Object.keys(inc).forEach(k => { const v = inc[k]; if (k === 'imported' || k === 'extra' || k === 'images' || v == null || v === '' || (Array.isArray(v) && !v.length)) return; if (k === 'photo' && (v.status === 'none' || v.status === 'unknown') && !(v.evidence || []).length) return; if (Array.isArray(v) && Array.isArray(old[k]) && ['questions','stages','waypoints','links','policy','checker'].includes(k)) { const id = x => x?.id || x?.url || JSON.stringify(x); const m = new Map(old[k].map(x => [id(x), x])); v.forEach(x => m.set(id(x), typeof x === 'object' && x ? Object.assign({}, m.get(id(x)), x) : x)); out[k] = [...m.values()]; } else out[k] = v; });
+  Object.keys(inc).forEach(k => { const v = inc[k]; if (k === 'imported' || k === 'extra' || k === 'images' || v == null || v === '' || (Array.isArray(v) && !v.length)) return; if (k === 'photo' && (v.status === 'none' || v.status === 'unknown') && !(v.evidence || []).length) return; if (Array.isArray(v) && Array.isArray(old[k]) && ['questions','stages','waypoints','links','policy','checker'].includes(k)) { const id = x => x?.id || x?.url || (k === 'waypoints' ? x?.prefix || x?.code || x?.name : '') || JSON.stringify(x); const m = new Map(old[k].map(x => [id(x), x])); v.forEach(x => m.set(id(x), typeof x === 'object' && x ? Object.assign({}, m.get(id(x)), x) : x)); out[k] = [...m.values()]; } else out[k] = v; });
   return out;
 }
 function remapAnswers(code, oldQs, newQs) {
@@ -641,6 +641,7 @@ const MODEL_PROCESSING_GUIDE = {
     'Use question type image for required photo tasks. Its exported answer is: Photo will be attached to log!',
     'Convert each Multi or Puzzle step into an interactive stage. Use descriptive input labels rather than Value of A, preserve formulas exactly, and mark the last calculated coordinates as the final location.',
     'Put each variable input on the stage where the observation is made. Earlier-stage variables are automatically available to later formulas; do not duplicate every input on the final stage.',
+    'Associate waypoints with stable stage ids using waypoint.stage; retain notes even when coordinates are unavailable. Preserve raw inputs and transformations, stage progress, original coordinate bases and checker-returned coordinates on export.',
     'Put final-container or hide information in finalDetails and attach checker links to the applicable stage.',
     'Keep premium notes in personal_note and retain unknown fields rather than discarding them.',
     'Return valid geocache-field-save version 2 JSON and retain schema and model_processing_guide.'
@@ -652,7 +653,7 @@ function buildSave(scope) {
   else if (scope === 'unlisted') { codes = codes.filter(c => !DB.trips.some(t => t.codes.includes(c))); trips = []; }
   const p = {}; codes.forEach(c => { if (DB.prog[c]) p[c] = DB.prog[c]; });
   return {...(DB.envelope || {}), media_archive: DB.mediaArchive || [], recovery: DB.recovery || {}, conflicts: DB.conflicts || [], image_payloads: DB.image_payloads || {}, format: 'geocache-field-save', version: 2, exported: new Date().toISOString(),
-    schema: {questions: ['id', 'n', 'title', 'prompt', 'location', 'context', 'instructions', 'type', 'options', 'answerFields'], questionTypes: ['text', 'textarea', 'number', 'choice', 'confirmation', 'image'], stages: ['title', 'note', 'desc', 'inputs', 'choices', 'N', 'S', 'W', 'E', 'coords', 'finalDetails', 'checker'], cacheExtras: ['personal_note', 'links', 'images', 'hint', 'checker']},
+    schema: {questions: ['id', 'n', 'title', 'prompt', 'location', 'context', 'instructions', 'type', 'options', 'answerFields'], questionTypes: ['text', 'textarea', 'number', 'choice', 'confirmation', 'image'], stages: ['id', 'title', 'note', 'desc', 'inputs', 'choices', 'N', 'S', 'W', 'E', 'coords', 'offset', 'checks', 'manual_coords', 'owner_answers', 'finalDetails', 'checker'], stageInputs: ['id', 'l', 'L', 'kind', 'num', 'ph', 'transform'], waypoints: ['prefix', 'name', 'type', 'code', 'coords', 'lat', 'lon', 'note', 'stage'], progress: ['ans', 'notes', 'st', 'solved', 'use_saved_final'], stageProgress: ['in', 'done', 'base', 'original', 'solved'], cacheExtras: ['personal_note', 'links', 'images', 'hint', 'checker']},
     model_processing_guide: MODEL_PROCESSING_GUIDE,
     settings: {north: UI.north || 'true', decl: DECL_VAL(), mapProvider: UI.mapProvider || 'simple', apiKeys: {carto: UI.cartoKey || ''}},
     caches: codes.map(c => DB.caches[c]), trips: trips.map(t => ({id: t.id, name: t.name, emoji: t.emoji || '', codes: t.codes.filter(c => codes.includes(c))})), prog: p};
@@ -1766,7 +1767,7 @@ function hintLinksHTML(code) {
 }
 function waypointsHTML(code) {         // waypoints that aren't already shown inside a stage
   const c = C(code), all = c.waypoints || [], rest = all.filter(w => wpStage(c, w) < 0); if (!rest.length) return '';
-  return `<details ${(c.stages || []).length ? '' : 'open'}><summary>Waypoints on the listing (${all.length})</summary>${rest.map(wpHTML).join('')}</details>`;
+  return `<details ${(c.stages || []).length ? '' : 'open'}><summary>Waypoints on the listing (${rest.length})</summary>${rest.map(wpHTML).join('')}</details>`;
 }
 function imagesHTML(code) {
   const ims = C(code).images || []; if (!ims.length) return '';
@@ -1837,6 +1838,7 @@ function stageHTML(code, s, i, cur) {
   return `<details class="stage ${st.done ? 'sdone' : ''}" ${i === cur ? 'open' : ''}>
     <summary><span class="sn">${i + 1}</span><span class="stt">${esc(currentStageTitle(s))}</span>${st.done ? '<span class="sck">✓</span>' : ''}</summary>
     <div id="stageloc-${code}-${s.id}">${stageLocationHTML(code,i)}</div>
+    ${(C(code).waypoints || []).filter(w => wpStage(C(code), w) === i).map(wpHTML).join('')}
     ${EDITMD[code + '|' + s.id] ? mdField(code, s.id, 'note', s.note || '', 1, 'Note') : (s.note ? `<div class="hint md">${mdInline(esc(s.note))}</div>` : '')}
 
     ${EDITMD[code + '|' + s.id] ? mdField(code, s.id, 'desc', s.desc || '', 4, 'Text') : (s.desc && !s.inputs.some(d=>d.l.trim()===s.desc.trim()) ? `<div class="desc md">${renderMd(s.desc)}</div>` : '')}
