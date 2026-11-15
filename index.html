@@ -1439,6 +1439,18 @@ function paintNav() {
   st.textContent = [NAV.err, accM > 50 ? 'low GPS accuracy — move to open sky' : ''].filter(Boolean).join(' · ');
 }
 
+function scrollToNextUnfinishedCache(code){
+ requestAnimationFrame(()=>{
+  let card=document.getElementById('card-'+code)?.nextElementSibling;
+  while(card){
+   if(card.matches('article.card')&&!prog(card.dataset.code).logged){
+    card.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});return;
+   }
+   card=card.nextElementSibling;
+  }
+ });
+}
+
 async function animateCacheComplete(button,event){
  button.dataset.completing='true';button.setAttribute('aria-busy','true');
  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches,fill=button.querySelector('.cache-fill'),icon=button.querySelector('.cache-icon-position'),label=button.querySelector('.cache-label'),r=button.getBoundingClientRect();
@@ -2444,7 +2456,7 @@ document.addEventListener('click', async e => {
     else if(el.dataset.step==='sent')p.sent=true;else{p.logged=true;SESSION[code]=UI.scope.k;}
     const justLogged=act==='field-progress'&&p.logged&&!previous.logged;
     save();if(justLogged){await animateCacheComplete(el,e);if(!el.isConnected||!prog(code).logged)return;}
-    rerenderCard(code);renderDrawer();toast(p.logged?'Cache logged ✓':p.sent?'Answers sent ✓':'Last step undone',act==='field-progress'?()=>{const state=PR(code);state.logged=previous.logged;state.sent=previous.sent;if(previous.session===undefined)delete SESSION[code];else SESSION[code]=previous.session;save();rerenderCard(code);renderDrawer();toast('Last step undone');}:null);try{navigator.vibrate?.(15);}catch(_){}return;
+    rerenderCard(code);renderDrawer();if(justLogged)scrollToNextUnfinishedCache(code);toast(p.logged?'Cache logged ✓':p.sent?'Answers sent ✓':'Last step undone',act==='field-progress'?()=>{const state=PR(code);state.logged=previous.logged;state.sent=previous.sent;if(previous.session===undefined)delete SESSION[code];else SESSION[code]=previous.session;save();rerenderCard(code);renderDrawer();toast('Last step undone');}:null);try{navigator.vibrate?.(15);}catch(_){}return;
   }
   if (act === 'mapfirst') { putCacheFirst(code,el); return; }
   if (act === 'toggleSel') {
