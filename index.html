@@ -344,6 +344,12 @@ details.menu[open]>summary{color:var(--text)}
 .bottom-sheet.sheet-ready{transform:translateY(0)}.bottom-sheet.dragging{transition:none}.sheet-titlebar{flex:none;padding:9px 18px 13px;border-bottom:1px solid var(--line);touch-action:none;user-select:none;cursor:grab;background:var(--card);color:var(--text);z-index:2}.sheet-titlebar:active{cursor:grabbing}.sheet-grabber{width:38px;height:5px;border-radius:3px;background:var(--muted);opacity:.45;margin:0 auto 11px}.sheet-title-row{display:flex;gap:14px;align-items:center;justify-content:space-between}.sheet-title-row h2{font-size:19px;line-height:1.2;margin:0 0 4px}.sheet-title-row small{display:block;font-size:12px;color:var(--muted)}.sheet-x{display:grid;place-items:center;flex:none;width:36px;height:36px;border:0;border-radius:50%;color:var(--text);background:var(--bg);cursor:pointer}.sheet-x:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.sheet-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom)}
 .sheet-metro .sheet-body{display:flex;overflow:hidden}.sheet-metro .metro-sheet{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;border:0;border-radius:0;box-shadow:none;margin:0;padding:0 14px;background:var(--card);overflow:hidden}.sheet-metro .metro-progress{padding:10px 0}.sheet-metro .metro-progress small{font-size:11px}.metro-viewport{flex:1;min-height:120px;position:relative;overflow:hidden;background:#fff;border-radius:12px;touch-action:none;cursor:grab;overscroll-behavior:contain;user-select:none}.metro-viewport:active{cursor:grabbing}.metro-viewport .metro-map-art{position:absolute;top:0;left:0;width:1080px;height:1312px;max-width:none;transform-origin:0 0;will-change:transform}.metro-viewport .metro-map-art>img{width:1080px;height:1312px;max-width:none;pointer-events:none}.metro-viewport .metro-map-pin .metro-check{transform:scale(var(--metro-pin-scale,1));transform-origin:center}.metro-map-caption{flex:none;font-size:10px;line-height:1.45;color:var(--muted);margin:8px 0 10px;text-align:center}.sheet-compass .scene.cmp{min-height:100%;padding:12px 16px 20px;box-sizing:border-box;border-radius:0}.sheet-compass .dial{width:min(86vw,44dvh,400px)}.sheet-compass .gbtns{margin-top:8px}.sheet-compass .dwrap{margin-top:0}
 @media(prefers-reduced-motion:reduce){.bottom-sheet{transition:none}}
+
+.sheet-x{background:transparent;border:0;border-radius:0;box-shadow:none;width:44px;height:44px}.sheet-x:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}.bottom-sheet:focus{outline:none}
+details:not(.menu)>summary{display:flex;align-items:center;gap:8px;list-style:none}details:not(.menu)>summary::-webkit-details-marker{display:none}details:not(.menu)>summary::marker{content:''}
+details:not(.menu)>summary::after,.metro-station>summary::after{content:'';display:block;float:none;flex:0 0 7px;width:7px;height:7px;border-right:1.7px solid currentColor;border-bottom:1.7px solid currentColor;color:var(--muted);opacity:.6;transform:rotate(45deg);margin:0 5px 4px auto;transition:transform .16s ease}
+details[open]:not(.menu)>summary::after,.metro-station[open]>summary::after{content:'';transform:rotate(225deg);margin-bottom:-3px}.menu>summary::after{display:none}
+@media(prefers-reduced-motion:reduce){details:not(.menu)>summary::after{transition:none}}
 </style>
 </head>
 <body>
@@ -491,19 +497,28 @@ function metroStagesHTML(code){
  const s=METRO_STATIONS[i],stage=C(code).stages?.find(v=>v.id==='metro'+(i+1)),done=metroDone(i),rank=metroRank(i);
  const ws=(C(code).waypoints||[]).filter(w=>(stage&&w.stage===stage.id)||s.prefixes.includes(w.prefix));
  const photos=(C(code).images||[]).filter(im=>im.qid==='q'+(i+1));
- return `<details class="stage metro-station ${done?'sdone':''}" id="metro-station-${i}" data-metro-station-row="${i}"><summary><span class="metro-station-heading">${metroCheckbox(i,'metro-summary-check')}<span>${esc(s.name)}</span></span></summary>${stage?.desc?`<div class="desc metro-story">${linkify(stage.desc)}</div>`:''}<p>Choose ONE of ${s.count} outdoor, street-level pylons. Include yourself or a personal item and the legible station name.</p>${ws.length?`<details class="metro-pylons"><summary>Qualifying entrance pylons (${ws.length})</summary>${ws.map(w=>`<section class="metro-pylon"><b>${esc(w.name.replace(/^\d+[. ·-]*/,''))}</b><p>${esc(w.note||'')}</p>${w.lat!=null&&w.lon!=null?`<small>${esc(dmText(w.lat,w.lon))}</small>${navBtns(w.lat,w.lon,w.name)}`:'<small>Exact pylon coordinates pending.</small>'}</section>`).join('')}</details>`:'<p class="note">Exact pylon coordinates pending the waypoint scrape.</p>'}<div class="metro-photo-controls"><label class="btn pri metro-camera">Open camera / choose photo<input type="file" accept="image/*" capture="user" hidden data-metro-photo="${i}"></label><small>${photos.length?`${photos.length} photo${photos.length===1?'':'s'} attached to this station.`:'Take or attach your qualifying pylon photo here.'} Photos stay with your field guide; attach them to your Found It log.</small></div>${metroCompleteBubble(i)}</details>`;
+ return `<details class="stage metro-station ${done?'sdone':''}" id="metro-station-${i}" data-metro-station-row="${i}"><summary><span class="metro-station-heading">${metroCheckbox(i,'metro-summary-check')}<span>${esc(s.name)}</span></span></summary>${ws.length?`<details class="metro-pylons"><summary>Qualifying entrance pylons (${ws.length})</summary>${ws.map(w=>`<section class="metro-pylon"><b>${esc(w.name.replace(/^\d+[. ·-]*/,''))}</b><p>${esc(w.note||'')}</p>${w.lat!=null&&w.lon!=null?`<small>${esc(dmText(w.lat,w.lon))}</small>${navBtns(w.lat,w.lon,w.name)}`:'<small>Exact pylon coordinates pending.</small>'}</section>`).join('')}</details>`:'<p class="note">Exact pylon coordinates pending the waypoint scrape.</p>'}${stage?.desc?`<div class="desc metro-story">${linkify(stage.desc)}</div>`:''}<p>Choose ONE of ${s.count} outdoor, street-level pylons. Include yourself or a personal item and the legible station name.</p><div class="metro-photo-controls"><label class="btn pri metro-camera">Open camera / choose photo<input type="file" accept="image/*" capture="user" hidden data-metro-photo="${i}"></label><small>${photos.length?`${photos.length} photo${photos.length===1?'':'s'} attached to this station.`:'Take or attach your qualifying pylon photo here.'} Photos stay with your field guide; attach them to your Found It log.</small></div>${metroCompleteBubble(i)}</details>`;
  }).join('')}${notesHTML(code,'Station visits, photo filenames, travel notes…','Tour notes')}`;
 }
+const METRO_COMPLETE_TIMERS=new Map();
 function setMetroDone(i,done,from){
  if(!C(METRO_CODE)||!Number.isInteger(i)||!METRO_STATIONS[i])return;
+ clearTimeout(METRO_COMPLETE_TIMERS.get(i));METRO_COMPLETE_TIMERS.delete(i);
  const p=PR(METRO_CODE),id='metro'+(i+1),wasDone=metroDone(i),order=metroCompletedOrder();
  p.st[id]={...p.st[id],done,in:p.st[id]?.in||{}};
  p.metro_order=done?(wasDone?order:[...order.filter(v=>v!==i),i]):order.filter(v=>v!==i);
- // Retain legacy answers, but do not create owner-reporting questions or answers.
  if(!done&&p.ans['q'+(i+1)]==='Photo will be attached to log!')p.ans['q'+(i+1)]='';
- if(done&&!wasDone&&from)confetti(from,true);
- save();metroRefreshStationViews();
- if(done&&!wasDone){const bubble=document.querySelector(`[data-metro-bubble="${i}"]`);if(bubble){bubble.classList.add('justdone');setTimeout(()=>bubble.classList.remove('justdone'),600);}}
+ if(done&&!wasDone&&from)confetti(from,'station');
+ save();
+ const control=from?.closest('.stagecomplete');
+ if(done&&!wasDone&&control){
+  document.querySelectorAll(`[data-metro-check="${i}"]`).forEach(el=>el.checked=true);
+  control.classList.remove('justdone');void control.offsetWidth;control.classList.add('justdone');
+  control.closest('.stage')?.classList.add('sdone');
+  const msg=control.querySelector('.stagemsg');if(msg)msg.innerHTML='<b>Stage completed</b><small>Nice work — progress saved</small>';
+  try{navigator.vibrate?.(12);}catch(_){}
+  METRO_COMPLETE_TIMERS.set(i,setTimeout(()=>{METRO_COMPLETE_TIMERS.delete(i);if(C(METRO_CODE)){metroRefreshStationViews();renderDrawer();}},560));
+ }else metroRefreshStationViews();
 }
 
 /* ---------- geometry ---------- */
@@ -1414,9 +1429,9 @@ function confetti(from,mode='station') {
  if(main){
   for(let i=0;i<68;i++){const angle=Math.random()*Math.PI*2,speed=100+Math.random()*190;particle(x,y,Math.cos(angle)*speed,Math.sin(angle)*speed,1.6);}
   for(let i=0;i<42;i++)particle(Math.random()*innerWidth,-12-Math.random()*45,(Math.random()-.5)*65,80+Math.random()*85,1.5,Math.random()*.3);
- }else for(let i=0;i<18;i++)particle(x,y,(Math.random()-.5)*48,-125-Math.random()*90);
- const start=performance.now(),life=main?1.8:.8;let last=start;
- function tick(now){const age=(now-start)/1000,dt=Math.min(.04,(now-last)/1000);last=now;g.clearRect(0,0,innerWidth,innerHeight);for(const p of parts){if(age<p.delay)continue;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=(main?155:48)*dt;p.angle+=dt*4;g.save();g.translate(p.x,p.y);g.rotate(p.angle);g.globalAlpha=Math.max(0,1-(age-p.delay)/life);g.fillStyle=p.color;g.fillRect(-p.w/2,-p.h/2,p.w,p.h);g.restore();}if(age<life+.3)requestAnimationFrame(tick);else cv.remove();}requestAnimationFrame(tick);
+ }else for(let i=0;i<18;i++)particle(x,y,(Math.random()-.5)*170,-125-Math.random()*90);
+ const start=performance.now(),life=main?1.8:1.15;let last=start,frame;const cleanup=()=>{cancelAnimationFrame(frame);cv.remove();},timer=setTimeout(cleanup,(life+.45)*1000);
+ function tick(now){const age=(now-start)/1000,dt=Math.min(.04,(now-last)/1000);last=now;g.clearRect(0,0,innerWidth,innerHeight);for(const p of parts){if(age<p.delay)continue;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=(main?155:48)*dt;p.angle+=dt*4;g.save();g.translate(p.x,p.y);g.rotate(p.angle);g.globalAlpha=Math.max(0,1-(age-p.delay)/life);g.fillStyle=p.color;g.fillRect(-p.w/2,-p.h/2,p.w,p.h);g.restore();}if(age<life+.3)frame=requestAnimationFrame(tick);else{clearTimeout(timer);cleanup();}}frame=requestAnimationFrame(tick);
 }
 
 function celebrateCache(from){
@@ -1449,7 +1464,7 @@ function toast(msg,undo=null) {
   clearTimeout(toastTimer);document.querySelectorAll('.toast').forEach(t=>t.remove());
   const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.setAttribute('aria-live','polite');
   const text=document.createElement('span');text.textContent=msg;t.appendChild(text);
-  if(undo){const button=document.createElement('button');button.type='button';button.setAttribute('aria-label','Undo last action');button.title='Undo';button.innerHTML='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 7a8 8 0 1 1-2 8M7 7H2m5 0V2" stroke-linecap="round" stroke-linejoin="round"/></svg>';button.addEventListener('click',e=>{e.stopPropagation();clearTimeout(toastTimer);t.remove();undo();});t.appendChild(button);}
+  if(undo){const button=document.createElement('button');button.type='button';button.setAttribute('aria-label','Undo last action');button.title='Undo';button.innerHTML='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h11a5 5 0 0 1 5 5v2a5 5 0 0 1-5 5H4M8 2L4 6l4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>';button.addEventListener('click',e=>{e.stopPropagation();clearTimeout(toastTimer);t.remove();undo();});t.appendChild(button);}
   document.body.appendChild(t);animateToast(t);const dismiss=()=>{toastTimer=setTimeout(()=>t.remove(),undo?7000:3200);};dismiss();t.addEventListener('pointerenter',()=>clearTimeout(toastTimer));t.addEventListener('pointerleave',dismiss);t.addEventListener('focusin',()=>clearTimeout(toastTimer));t.addEventListener('focusout',dismiss);
 }
 function idb() {
@@ -1598,7 +1613,7 @@ function openModal(html, full) {
 }
 function openBottomSheet(title,subtitle,body,kind){
  SHEET_ABORT?.abort();SHEET_ABORT=new AbortController();SHEET_CLOSING=false;SHEET_RETURN=document.activeElement;
- openModal(`<section class="bottom-sheet sheet-${kind}" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-titlebar" data-sheet-drag><div class="sheet-grabber" aria-hidden="true"></div><div class="sheet-title-row"><div><h2 id="sheet-title">${esc(title)}</h2><small>${esc(subtitle)}</small></div><button class="sheet-x" data-act="sheet-close" aria-label="Dismiss ${esc(kind==='metro'?'Metro map':'compass')}" title="Dismiss">${sheetCloseIcon}</button></div></div><div class="sheet-body">${body}</div></section>`,true);
+ openModal(`<section class="bottom-sheet sheet-${kind}" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-titlebar" data-sheet-drag><div class="sheet-grabber" aria-hidden="true"></div><div class="sheet-title-row"><div><h2 id="sheet-title">${esc(title)}</h2><small>${esc(subtitle)}</small></div><button class="sheet-x" data-act="sheet-close" aria-label="Dismiss ${esc(kind==='metro'?'Metro map':'compass')}" title="Dismiss">${sheetCloseIcon}</button></div></div><div class="sheet-body">${body}</div></section>`,true);
  const m=$('#modal'),panel=m.querySelector('.bottom-sheet'),bar=panel.querySelector('[data-sheet-drag]');m.className='modal bottom-sheet-modal';
  const signal=SHEET_ABORT.signal;let drag=null;
  bar.addEventListener('pointerdown',e=>{if(e.target.closest('button') || e.button>0)return;bar.setPointerCapture(e.pointerId);drag={id:e.pointerId,start:e.clientY,last:e.clientY,time:performance.now(),velocity:0};panel.classList.add('dragging');},{signal});
@@ -1607,7 +1622,7 @@ function openBottomSheet(title,subtitle,body,kind){
  bar.addEventListener('pointerup',e=>settle(e),{signal});bar.addEventListener('pointercancel',e=>settle(e,true),{signal});
  m.addEventListener('click',e=>{if(e.target===m)dismissSheet();},{signal});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();dismissSheet();}if(e.key==='Tab'){const els=[...panel.querySelectorAll('button,a[href],input,select,textarea,[tabindex="0"]')].filter(el=>el.getClientRects().length&&!el.disabled);if(!els.length)return;const first=els[0],last=els.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}},{signal});
- requestAnimationFrame(()=>panel.classList.add('sheet-ready'));panel.querySelector('.sheet-x').focus({preventScroll:true});
+ requestAnimationFrame(()=>panel.classList.add('sheet-ready'));panel.focus({preventScroll:true});
 }
 function dismissSheet(){const panel=document.querySelector('.bottom-sheet');if(!panel){closeModal();return;}if(SHEET_CLOSING)return;SHEET_CLOSING=true;panel.classList.remove('dragging');panel.style.transform='translateY(110%)';setTimeout(closeModal,matchMedia('(prefers-reduced-motion: reduce)').matches?0:230);}
 function closeModal() {
@@ -1901,7 +1916,7 @@ function waypointsHTML(code) {         // waypoints that aren't already shown in
 }
 function imagesHTML(code) {
   const ims = C(code).images || []; if (!ims.length) return '';
-  return `<details class="imagegroup" open><summary>Images (${ims.length})</summary><div class="thumbs">${ims.map((im, i) => `<button class="thumb" data-act="viewimg" data-code="${code}" data-i="${i}" aria-label="Open image ${i + 1}"><img data-imgid="${esc(im.id)}" alt="${esc(im.caption || im.name)}">${im.caption ? `<span>${esc(im.caption)}</span>` : ''}</button>`).join('')}
+  return `<details class="imagegroup" data-disclosure="photos" open><summary>Images (${ims.length})</summary><div class="thumbs">${ims.map((im, i) => `<button class="thumb" data-act="viewimg" data-code="${code}" data-i="${i}" aria-label="Open image ${i + 1}"><img data-imgid="${esc(im.id)}" alt="${esc(im.caption || im.name)}">${im.caption ? `<span>${esc(im.caption)}</span>` : ''}</button>`).join('')}
     <label class="thumb add" title="Add image">＋<input type="file" accept="image/*" multiple hidden data-attach="${code}"></label></div></details>`;
 }
 const gmaps = (lat, lon) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=walking`;
@@ -2088,11 +2103,39 @@ function refreshCard(code) {
   if (b && !b.dataset.flash) { b.textContent = n ? `Copy answers (${filled}/${n} answered)` : 'Copy answers (add questions first)'; b.disabled = !n || (owner.length>0 && filled<n); }
   const pr = document.getElementById('prev-' + code); if (pr) pr.textContent = buildMsg(code);
 }
-function afterCardRender(code) { refreshSavedFinal(code); document.querySelectorAll(`#card-${code} .mdta`).forEach(autogrow); hydrateImages(document.getElementById('card-' + code)); refreshCard(code); (C(code).stages || []).forEach(s => updStage(code, s.id)); updPuzzle(code); document.querySelectorAll(`#card-${code} textarea.ans`).forEach(autogrow); }
+function cacheDisclosureKey(el){
+ if(el.classList.contains('menu'))return null;
+ const code=el.closest('article.card')?.dataset.code;if(!code)return null;
+ const local=node=>{
+  if(node.dataset.disclosure)return node.dataset.disclosure;
+  if(node.classList.contains('imagegroup'))return 'photos';
+  if(node.id)return 'id:'+node.id;
+  if(node.classList.contains('stage')){const stage=node.querySelector('[data-sdone]')?.dataset.sdone;return stage?'stage:'+stage.split('|')[1]:'stage:'+node.querySelector(':scope > summary')?.textContent.trim();}
+  const text=(node.querySelector(':scope > summary')?.textContent||'section').replace(/\s*\([^)]*\d[^)]*\)/g,'').replace(/\s+/g,' ').trim();return 'section:'+text;
+ };
+ const chain=[];let node=el;
+ while(node&&node.closest('article.card')?.dataset.code===code){chain.unshift(local(node));node=node.parentElement?.closest('details');}
+ return chain.join('/');
+}
+function captureCacheDisclosures(code){
+ const root=document.getElementById('card-'+code);if(!root||!C(code))return;
+ let changed=false;for(const el of root.querySelectorAll('details:not(.menu)')){const key=cacheDisclosureKey(el);if(!key)continue;const saved=prog(code).disclosures||{};if(saved[key]!==el.open){const p=PR(code);p.disclosures=p.disclosures||{};p.disclosures[key]=el.open;changed=true;}}
+ if(changed)scheduleSave();
+}
+function restoreCacheDisclosures(code){
+ const root=document.getElementById('card-'+code),states=prog(code).disclosures||{};if(!root)return;
+ root.querySelectorAll('details:not(.menu)').forEach(el=>{const key=cacheDisclosureKey(el);if(Object.hasOwn(states,key))el.open=!!states[key];});
+}
+document.addEventListener('toggle',e=>{
+ const el=e.target;if(!el.matches?.('details')||!el.isConnected||el.classList.contains('menu'))return;
+ const code=el.closest('article.card')?.dataset.code,key=cacheDisclosureKey(el);if(!code||!C(code)||!key)return;
+ if(prog(code).disclosures?.[key]===el.open)return;const p=PR(code);p.disclosures=p.disclosures||{};p.disclosures[key]=el.open;scheduleSave();
+},true);
+function afterCardRender(code) { restoreCacheDisclosures(code); refreshSavedFinal(code); document.querySelectorAll(`#card-${code} .mdta`).forEach(autogrow); hydrateImages(document.getElementById('card-' + code)); refreshCard(code); (C(code).stages || []).forEach(s => updStage(code, s.id)); updPuzzle(code); document.querySelectorAll(`#card-${code} textarea.ans`).forEach(autogrow); }
 function autogrow(el) { el.style.height = 'auto'; el.style.height = Math.max(44, el.scrollHeight) + 'px'; }
 function rerenderCard(code) {
   const el = document.getElementById('card-' + code); if (!el) return render();
-  el.outerHTML = cardHTML(code, scopeList().indexOf(code)); afterCardRender(code); refreshHeader();
+  captureCacheDisclosures(code);el.outerHTML = cardHTML(code, scopeList().indexOf(code)); afterCardRender(code); refreshHeader();
 }
 function renderField() {
   NEARBY.orderPos=NEARBY.pos?[NEARBY.pos.latitude,NEARBY.pos.longitude]:null;
