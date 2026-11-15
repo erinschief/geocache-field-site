@@ -480,7 +480,7 @@ function metroRefreshStationViews(){
 }
 function metroProgress(){const n=metroCount();return `<div class="metro-progress" role="status" aria-live="polite"><b>${n} / 16 stations complete</b><progress max="16" value="${n}" aria-label="Station photo progress"></progress><small>${n===16?'All station photos recorded. Attach all 16 to your Found It log.':'Check a station after taking its qualifying photo.'}</small></div>`;}
 function metroEntryHTML(code){return !isMetroTour(code)?'':`<section class="metro-entry"><button class="btn pri wide" data-act="metro-map">Metro Grand Tour map · ${metroCount()}/16</button>${metroProgress()}</section>`;}
-let METRO_VIEW=null;
+let METRO_VIEW=null,METRO_CAMERA=null;
 function openMetroMap(){
  if(!C(METRO_CODE))return;
  openBottomSheet('Metro Grand Tour','16 stations · one pylon photo at each',`<div class="metro-sheet"><div id="metro-sheet-progress">${metroProgress()}</div><div class="metro-viewport" tabindex="0" aria-label="Metro map: pinch or scroll to zoom, drag to pan"><div class="metro-map-art"><img src="${METRO_MAP}" width="1080" height="1312" draggable="false" alt="WMATA system map with station checkboxes numbered in your completion order.">${METRO_STATIONS.map((s,i)=>`<div class="metro-map-pin" style="left:${s.x/10.8}%;top:${s.y/13.12}%" title="${esc(s.name)}">${metroCheckbox(i)}</div>`).join('')}</div></div><p class="metro-map-caption">Pinch or scroll to zoom · drag to pan · double-tap to fit<br><a href="https://www.wmata.com/content/dam/wmata-com/maps/system-map-rail.pdf" target="_blank" rel="noopener">WMATA map</a> · © WMATA 2025 · retrieved Nov. 14, 2026</p></div>`,'metro');
@@ -494,8 +494,10 @@ function initMetroMap(){
   const w=1080*v.scale,h=1312*v.scale,W=viewport.clientWidth,H=viewport.clientHeight;
   v.x=w<W?(W-w)/2:Math.min(12,Math.max(W-w-12,v.x));v.y=h<H?(H-h)/2:Math.min(12,Math.max(H-h-12,v.y));
   art.style.transform=`translate(${v.x}px,${v.y}px) scale(${v.scale})`;art.style.setProperty('--metro-pin-scale',Math.min(2,1/v.scale));
+  METRO_CAMERA={zoom:v.scale/v.fit,cx:(W/2-v.x)/v.scale,cy:(H/2-v.y)/v.scale};
  }
  function fit(){v.fit=Math.max(.05,Math.min((viewport.clientWidth-24)/1080,(viewport.clientHeight-24)/1312));v.scale=v.fit;v.x=v.y=0;draw();}
+ function restore(camera){v.fit=Math.max(.05,Math.min((viewport.clientWidth-24)/1080,(viewport.clientHeight-24)/1312));v.scale=v.fit*Math.max(1,Math.min(10,camera.zoom));v.x=viewport.clientWidth/2-camera.cx*v.scale;v.y=viewport.clientHeight/2-camera.cy*v.scale;draw();}
  function zoom(scale,x,y){const next=Math.max(v.fit,Math.min(v.fit*10,scale)),f=next/v.scale;v.x=x-(x-v.x)*f;v.y=y-(y-v.y)*f;v.scale=next;draw();}
  function baseline(){const pts=[...v.points.values()];if(pts.length>=2){const [a,b]=pts;v.base={distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),mid:{x:(a.x+b.x)/2,y:(a.y+b.y)/2},x:v.x,y:v.y,scale:v.scale};}else v.base=null;}
  viewport.addEventListener('wheel',e=>{e.preventDefault();const pt=position(e),dy=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?viewport.clientHeight:1);zoom(v.scale*Math.exp(-dy*.002),pt.x,pt.y);},{passive:false});
@@ -509,7 +511,8 @@ function initMetroMap(){
  viewport.addEventListener('click',e=>{if(v.moved){e.preventDefault();e.stopImmediatePropagation();return;}if(e.target.closest('label,input'))return;const now=performance.now();if(now-v.lastTap<300)fit();v.lastTap=now;},true);
  viewport.addEventListener('dblclick',e=>{if(!e.target.closest('label,input')){e.preventDefault();fit();}});
  viewport.addEventListener('keydown',e=>{if(e.target!==viewport)return;if(['+','=','-','0','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();if(e.key==='0')fit();else if(['+','=','-'].includes(e.key))zoom(v.scale*(e.key==='-'?.8:1.25),viewport.clientWidth/2,viewport.clientHeight/2);else{v.x+=e.key==='ArrowLeft'?40:e.key==='ArrowRight'?-40:0;v.y+=e.key==='ArrowUp'?40:e.key==='ArrowDown'?-40:0;draw();}}});
- const ro=new ResizeObserver(()=>{const ratio=v.scale/v.fit;fit();if(ratio>1.01)zoom(v.fit*ratio,viewport.clientWidth/2,viewport.clientHeight/2);});ro.observe(viewport);fit();METRO_VIEW={state:v,fit,destroy:()=>ro.disconnect()};
+ const restoreOrFit=()=>{if(METRO_CAMERA)restore(METRO_CAMERA);else fit();};
+ const ro=new ResizeObserver(restoreOrFit);ro.observe(viewport);restoreOrFit();METRO_VIEW={state:v,fit,destroy:()=>ro.disconnect()};
 }
 function metroStagesHTML(code){
  return `<div class="qh">Station photos (${metroCount()}/16)</div><p class="note">One photo per station. Completed stations appear first in the order you complete them; remaining stations follow the cache listing.</p>${metroStationOrder().map(i=>{
