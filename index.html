@@ -336,6 +336,8 @@ details.menu[open]>summary{color:var(--text)}
 .metro-sheet{background:var(--bg,#f7f7f7);color:var(--text,#222);width:min(100%,1100px);height:94dvh;margin:3dvh auto;overflow:auto;border-radius:20px;padding:18px;box-sizing:border-box}
 .metro-sheet header{display:flex;align-items:center;justify-content:space-between;gap:12px}.metro-sheet h2{margin:0}.metro-progress{display:grid;gap:7px;padding:14px 0}.metro-progress progress{width:100%;height:14px;accent-color:#159368}.metro-progress small{font-size:12px}.metro-zoom{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.metro-zoom input{width:180px}.metro-zoom span{font-size:12px}.metro-map-scroll{overflow:auto;max-height:60dvh;background:white;border:1px solid #aaa;border-radius:12px;overscroll-behavior:contain;touch-action:pan-x pan-y pinch-zoom}.metro-map-art{position:relative;max-width:none}.metro-map-art>img{display:block;width:100%;height:auto;max-width:none}.metro-map-pin{position:absolute;transform:translate(-50%,-50%);pointer-events:none}.metro-map-pin input{pointer-events:auto}.metro-check{position:relative;display:inline-flex;align-items:center;gap:5px;min-width:44px;min-height:44px;margin:0;cursor:pointer;justify-content:center}.metro-check input{appearance:none;-webkit-appearance:none;margin:0;width:25px;height:25px;border:2px solid #133e4c;border-radius:6px;background:white;cursor:pointer;flex:none}.metro-check input:checked{background:#12734d;border-color:#fff;box-shadow:0 0 0 2px #12734d}.metro-check input:checked:after{content:'✓';display:block;text-align:center;color:white;font:bold 19px/21px system-ui}.metro-check input:focus-visible{outline:3px solid #147bd1;outline-offset:3px}.metro-check span{position:absolute;left:calc(50% + 9px);top:0;background:#173e50;color:white;font:bold 10px/15px system-ui;padding:0 4px;border-radius:8px;pointer-events:none}.metro-list-row{display:flex;align-items:center;gap:10px;padding:8px 0}.metro-list-row>span{flex:1}.metro-list-row small{display:block;opacity:.7}.metro-pylon{border-left:3px solid #288c8a;padding:10px;margin:10px 0}.metro-pylon p{margin:5px 0}.metro-entry{margin:12px 0}.metro-sheet-list{padding-bottom:env(safe-area-inset-bottom)}
 
+
+.metro-station-heading{display:inline-flex;align-items:center;gap:10px;vertical-align:middle;max-width:calc(100% - 25px)}.metro-station-heading>span{flex:1}.metro-summary-check{flex:none}.metro-summary-check span{position:static!important;background:none!important;color:var(--text)!important;font-size:14px!important;padding:0!important}.metro-photo-controls{display:flex;align-items:flex-start;flex-direction:column;gap:8px;margin:14px 0 6px}.metro-camera input{display:none!important}.metro-photo-controls small{color:var(--muted);font-size:12px}.metro-complete{cursor:pointer}.metro-sheet{overflow-x:hidden}.metro-story{margin:12px 0}.metro-station>summary{list-style:none}.metro-station>summary::-webkit-details-marker{display:none}.metro-station>summary:after{content:'⌄';float:right;margin-top:10px}.metro-station[open]>summary:after{content:'⌃'}
 </style>
 </head>
 <body>
@@ -415,7 +417,6 @@ function upgradeMetroTour(){
  METRO_STATIONS.forEach((s,i)=>{
   const id='metro'+(i+1),qid='q'+(i+1);
   if(!c.stages.some(v=>v.id===id))c.stages.push({id,title:`Station ${i+1}: ${s.name}`,note:`Photograph ONE of ${s.count} outdoor street-level entrance pylons.`,desc:'',inputs:[],choices:[],N:'',S:'',W:'',E:'',coords:'',photo_question:qid,waypoint_prefixes:s.prefixes});
-  if(!c.questions.some(v=>v.id===qid))c.questions.push({id:qid,n:String(i+1),title:s.name+' — required pylon photo',prompt:'Photograph yourself or a personal item with ONE outdoor street-level entrance pylon. The station name must be legible.',type:'image',options:[],answerFields:[]});
   (c.waypoints||[]).filter(w=>s.prefixes.includes(w.prefix)).forEach(w=>w.stage=id);
  });
  c.extra={...c.extra,metro_tour_version:1};save();
@@ -426,32 +427,53 @@ function metroDone(i){
  return p.ans?.['q'+(i+1)]==='Photo will be attached to log!' || (C(METRO_CODE)?.images||[]).some(im=>im.qid==='q'+(i+1));
 }
 const metroCount=()=>METRO_STATIONS.filter((s,i)=>metroDone(i)).length;
+function metroCompletedOrder(){
+ const saved=prog(METRO_CODE).metro_order||[],seen=new Set();
+ return [...saved,...METRO_STATIONS.map((s,i)=>i)].filter(i=>Number.isInteger(i)&&METRO_STATIONS[i]&&metroDone(i)&&!seen.has(i)&&seen.add(i));
+}
+function metroStationOrder(){return [...metroCompletedOrder(),...METRO_STATIONS.map((s,i)=>i).filter(i=>!metroDone(i))];}
+function metroRank(i){const rank=metroCompletedOrder().indexOf(i);return rank<0?'':String(rank+1);}
 function metroCheckbox(i,cls=''){
- return `<label class="metro-check ${cls}"><input type="checkbox" data-metro-check="${i}" aria-label="${esc(METRO_STATIONS[i].name)} photo complete" ${metroDone(i)?'checked':''}><span>${i+1}</span></label>`;
+ const rank=metroRank(i);
+ return `<label class="metro-check ${cls}"><input type="checkbox" data-metro-check="${i}" aria-label="${esc(METRO_STATIONS[i].name)} photo complete" ${metroDone(i)?'checked':''}>${rank?`<span>${rank}</span>`:''}</label>`;
+}
+function metroSheetListHTML(){return metroStationOrder().map(i=>{const s=METRO_STATIONS[i];return `<div class="metro-list-row" data-metro-station-row="${i}">${metroCheckbox(i)}<span>${esc(s.name)}<small>${s.count===1?'One qualifying pylon':`Choose 1 of ${s.count} pylons`}</small></span><button class="btn sm" data-act="metro-station" data-i="${i}">Details</button></div>`;}).join('');}
+function metroCompleteBubble(i){const done=metroDone(i);return `<label class="stagecomplete metro-complete" data-metro-bubble="${i}"><input type="checkbox" data-metro-check="${i}" aria-label="${esc(METRO_STATIONS[i].name)} photo complete" ${done?'checked':''}><span class="stagecheck" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 10.5l4 4L16 6.5"/></svg></span><span class="stagemsg"><b>${done?'Station completed':'Mark station complete'}</b><small>${done?'Tap to reopen this station':'Confirm your qualifying pylon photo is taken'}</small></span></label>`;}
+function metroRefreshStationViews(){
+ const open=[...document.querySelectorAll('.metro-station[open]')].map(el=>el.id);
+ if(document.getElementById('card-'+METRO_CODE)){rerenderCard(METRO_CODE);open.forEach(id=>{const el=document.getElementById(id);if(el)el.open=true;});}
+ if(document.querySelector('.metro-sheet')){
+  document.getElementById('metro-sheet-progress').innerHTML=metroProgress();
+  document.querySelector('.metro-sheet-list').innerHTML=metroSheetListHTML();
+  document.querySelectorAll('.metro-map-pin').forEach((el,i)=>el.innerHTML=metroCheckbox(i));
+ }
+ refreshHeader();
 }
 function metroProgress(){const n=metroCount();return `<div class="metro-progress" role="status" aria-live="polite"><b>${n} / 16 stations complete</b><progress max="16" value="${n}" aria-label="Station photo progress"></progress><small>${n===16?'All station photos recorded. Attach all 16 to your Found It log.':'Check a station after taking its qualifying photo.'}</small></div>`;}
 function metroEntryHTML(code){return !isMetroTour(code)?'':`<section class="metro-entry"><button class="btn pri wide" data-act="metro-map">Metro Grand Tour map · ${metroCount()}/16</button>${metroProgress()}</section>`;}
 function openMetroMap(){
  if(!C(METRO_CODE))return;
- openModal(`<section class="metro-sheet" aria-label="Metro Grand Tour map"><header><div><h2>Metro Grand Tour</h2><small>16 stations · one pylon photo at each</small></div><button class="btn" data-act="metro-close">Close</button></header><div id="metro-sheet-progress">${metroProgress()}</div><label class="metro-zoom">Map size <input type="range" min="360" max="1800" value="1080" step="20" data-metro-zoom aria-label="Map width"><span>Scroll to explore</span></label><div class="metro-map-scroll" tabindex="0" aria-label="Scrollable Metro map"><div class="metro-map-art" style="width:1080px"><img src="${METRO_MAP}" width="1080" height="1312" alt="Official WMATA system map used for the 2026 Grand Tour, with 16 numbered station photo checkboxes.">${METRO_STATIONS.map((s,i)=>`<div class="metro-map-pin" style="left:${s.x/10.8}%;top:${s.y/13.12}%" title="${esc(s.name)}">${metroCheckbox(i)}</div>`).join('')}</div></div><p class="note">Map: WMATA official system map, retrieved November 14, 2026 (© WMATA 2025). Checkboxes record your photos, not live transit service. <a href="https://www.wmata.com/content/dam/wmata-com/maps/system-map-rail.pdf" target="_blank" rel="noopener">Original map</a></p><div class="metro-sheet-list">${METRO_STATIONS.map((s,i)=>`<div class="metro-list-row">${metroCheckbox(i)}<span>${esc(s.name)}<small>Choose 1 of ${s.count} pylons</small></span><button class="btn sm" data-act="metro-station" data-i="${i}">Details</button></div>`).join('')}</div></section>`,true);
+ openModal(`<section class="metro-sheet" aria-label="Metro Grand Tour map"><header><div><h2>Metro Grand Tour</h2><small>16 stations · one pylon photo at each</small></div><button class="btn" data-act="metro-close">Close</button></header><div id="metro-sheet-progress">${metroProgress()}</div><label class="metro-zoom">Map size <input type="range" min="360" max="1800" value="1080" step="20" data-metro-zoom aria-label="Map width"><span>Scroll to explore</span></label><div class="metro-map-scroll" tabindex="0" aria-label="Scrollable Metro map"><div class="metro-map-art" style="width:1080px"><img src="${METRO_MAP}" width="1080" height="1312" alt="Official WMATA system map used for the 2026 Grand Tour, with 16 numbered station photo checkboxes.">${METRO_STATIONS.map((s,i)=>`<div class="metro-map-pin" style="left:${s.x/10.8}%;top:${s.y/13.12}%" title="${esc(s.name)}">${metroCheckbox(i)}</div>`).join('')}</div></div><p class="note">Map: WMATA official system map, retrieved November 14, 2026 (© WMATA 2025). Checkboxes record your photos, not live transit service. <a href="https://www.wmata.com/content/dam/wmata-com/maps/system-map-rail.pdf" target="_blank" rel="noopener">Original map</a></p><div class="metro-sheet-list">${metroSheetListHTML()}</div></section>`,true);
  const sc=document.querySelector('.metro-map-scroll');sc.scrollLeft=Math.max(0,572-sc.clientWidth/2);sc.scrollTop=Math.max(0,694-sc.clientHeight/2);
 }
 function metroStagesHTML(code){
- return `<div class="qh">Station photos (${metroCount()}/16)</div><p class="note">Visit in any order, across any number of days. One photo per station; entrance pylons below are alternatives.</p>${METRO_STATIONS.map((s,i)=>{
- const stage=C(code).stages.find(v=>v.id==='metro'+(i+1)),q=C(code).questions.find(v=>v.id==='q'+(i+1));
- const ws=(C(code).waypoints||[]).filter(w=>w.stage===stage?.id || s.prefixes.includes(w.prefix));
- return `<details class="stage metro-station" id="metro-station-${i}"><summary>${metroDone(i)?'✓ ':''}${i+1}. ${esc(s.name)}</summary><div class="metro-list-row">${metroCheckbox(i)}<b>Required photo taken</b></div><p>Choose ONE of ${s.count} outdoor, street-level pylons. Include yourself or a personal item and the legible station name.</p>${ws.length?ws.map(w=>`<section class="metro-pylon"><b>${esc(w.name)}</b><p>${esc(w.note||'')}</p>${w.lat!=null&&w.lon!=null?`<small>${esc(dmText(w.lat,w.lon))}</small>${navBtns(w.lat,w.lon,w.name)}`:'<small>Exact pylon coordinates pending.</small>'}</section>`).join(''):'<p class="note">Exact pylon coordinates pending the waypoint scrape.</p>'}${q?taskHTML(code,q,i):''}${stage?.desc?`<details><summary>Station history &amp; sights</summary><div class="desc">${linkify(stage.desc)}</div></details>`:''}</details>`;
+ return `<div class="qh">Station photos (${metroCount()}/16)</div><p class="note">One photo per station. Completed stations appear first in the order you complete them; remaining stations follow the cache listing.</p>${metroStationOrder().map(i=>{
+ const s=METRO_STATIONS[i],stage=C(code).stages?.find(v=>v.id==='metro'+(i+1)),done=metroDone(i),rank=metroRank(i);
+ const ws=(C(code).waypoints||[]).filter(w=>(stage&&w.stage===stage.id)||s.prefixes.includes(w.prefix));
+ const photos=(C(code).images||[]).filter(im=>im.qid==='q'+(i+1));
+ return `<details class="stage metro-station ${done?'sdone':''}" id="metro-station-${i}" data-metro-station-row="${i}"><summary><span class="metro-station-heading">${metroCheckbox(i,'metro-summary-check')}<span>${esc(s.name)}</span></span></summary>${stage?.desc?`<div class="desc metro-story">${linkify(stage.desc)}</div>`:''}<p>Choose ONE of ${s.count} outdoor, street-level pylons. Include yourself or a personal item and the legible station name.</p>${ws.length?`<details class="metro-pylons"><summary>Qualifying entrance pylons (${ws.length})</summary>${ws.map(w=>`<section class="metro-pylon"><b>${esc(w.name.replace(/^\d+[. ·-]*/,''))}</b><p>${esc(w.note||'')}</p>${w.lat!=null&&w.lon!=null?`<small>${esc(dmText(w.lat,w.lon))}</small>${navBtns(w.lat,w.lon,w.name)}`:'<small>Exact pylon coordinates pending.</small>'}</section>`).join('')}</details>`:'<p class="note">Exact pylon coordinates pending the waypoint scrape.</p>'}<div class="metro-photo-controls"><label class="btn pri metro-camera">Open camera / choose photo<input type="file" accept="image/*" capture="user" hidden data-metro-photo="${i}"></label><small>${photos.length?`${photos.length} photo${photos.length===1?'':'s'} attached to this station.`:'Take or attach your qualifying pylon photo here.'} Photos stay with your field guide; attach them to your Found It log.</small></div>${metroCompleteBubble(i)}</details>`;
  }).join('')}${notesHTML(code,'Station visits, photo filenames, travel notes…','Tour notes')}`;
 }
 function setMetroDone(i,done,from){
  if(!C(METRO_CODE)||!Number.isInteger(i)||!METRO_STATIONS[i])return;
- const p=PR(METRO_CODE),id='metro'+(i+1);
+ const p=PR(METRO_CODE),id='metro'+(i+1),wasDone=metroDone(i),order=metroCompletedOrder();
  p.st[id]={...p.st[id],done,in:p.st[id]?.in||{}};
- p.ans['q'+(i+1)]=done?'Photo will be attached to log!':'';
- document.querySelectorAll(`[data-metro-check="${i}"]`).forEach(el=>el.checked=done);
- if(done&&from)confetti(from,true);
- save();if(document.querySelector('.metro-sheet')){document.getElementById('metro-sheet-progress').innerHTML=metroProgress();}else rerenderCard(METRO_CODE);
- refreshHeader();
+ p.metro_order=done?(wasDone?order:[...order.filter(v=>v!==i),i]):order.filter(v=>v!==i);
+ // Retain legacy answers, but do not create owner-reporting questions or answers.
+ if(!done&&p.ans['q'+(i+1)]==='Photo will be attached to log!')p.ans['q'+(i+1)]='';
+ if(done&&!wasDone&&from)confetti(from,true);
+ save();metroRefreshStationViews();
+ if(done&&!wasDone){const bubble=document.querySelector(`[data-metro-bubble="${i}"]`);if(bubble){bubble.classList.add('justdone');setTimeout(()=>bubble.classList.remove('justdone'),600);}}
 }
 
 /* ---------- geometry ---------- */
@@ -720,7 +742,7 @@ function downloadJSON(text, name) {
 
 /* ---------- derived state ---------- */
 const qList = code => (C(code).questions || []);
-const needsAnswers = c => ['Virtual', 'EarthCache'].includes(c.type) || (c.questions || []).length > 0 || ownerStageAnswers(c.code).length > 0;
+const needsAnswers = c => !isMetroTour(c.code) && (['Virtual', 'EarthCache'].includes(c.type) || (c.questions || []).length > 0 || ownerStageAnswers(c.code).length > 0);
 function answerFilled(q, v) { if (q.type === 'image') return v === 'Photo will be attached to log!' || (C(q._code || '')?.images || []).some(im => im.qid === q.id); if (typeof v === 'object' && v) { const fields = q.answerFields || []; return fields.length ? fields.every(f => String(v[f.id] ?? '').trim().length > 0) : Object.values(v).some(x => String(x ?? '').trim()); } return String(v ?? '').trim().length > 0; }
 function answered(code) { if(isMetroTour(code))return metroCount(); const a = prog(code).ans || {}; return qList(code).filter(q => { q._code = code; const yes = answerFilled(q, a[q.id]); delete q._code; return yes; }).length; }
 function stageDone(code) { if(isMetroTour(code))return metroCount(); const st = prog(code).st || {}; return (C(code).stages || []).filter(s => (st[s.id] || {}).done).length; }
@@ -1461,8 +1483,9 @@ async function attachImages(code, files, meta) {
     try { const p = await prepImage(f), id = 'i' + uid(); await imgPut(id, p.blob); c.images.push({id, name: f.name || 'image', caption: '', kind: meta?.kind || '', qid: meta?.qid || '', w: p.w, h: p.h, bytes: p.blob.size}); n++; }
     catch (e) { toast('Couldn’t read ' + (f.name || 'that file')); }
   }
-  if (n && meta?.qid) {PR(code).ans[meta.qid] = 'Photo will be attached to log!';if(isMetroTour(code)){const i=METRO_STATIONS.findIndex((s,i)=>meta.qid==='q'+(i+1));if(i>=0){const p=PR(code),id='metro'+(i+1);p.st[id]={...p.st[id],done:true,in:p.st[id]?.in||{}};}}}
-  save(); rerenderCard(code); if (n) toast(n + ' image' + (n > 1 ? 's' : '') + ' added');
+  if(n&&meta?.qid&&isMetroTour(code)){const i=METRO_STATIONS.findIndex((s,i)=>meta.qid==='q'+(i+1));if(i>=0)setMetroDone(i,true,meta.from);}
+  else {if(n&&meta?.qid)PR(code).ans[meta.qid]='Photo will be attached to log!';save();rerenderCard(code);}
+  if(n)toast(n+' image'+(n>1?'s':'')+' added');
 }
 async function rotateImage(code, i) {
   const im = C(code).images[i], b = await imgGet(im.id); if (!b) return;
@@ -2429,7 +2452,8 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', async e => {
   const t = e.target, d = t.dataset;
-  if(d.metroCheck!=null){setMetroDone(+d.metroCheck,t.checked,t);return;}
+  if(d.metroCheck!=null){setMetroDone(+d.metroCheck,t.checked,t.closest('label')||t);return;}
+  if(d.metroPhoto!=null){const i=+d.metroPhoto;await attachImages(METRO_CODE,[...t.files],{kind:'answer',qid:'q'+(i+1),from:t.closest('label')});t.value='';return;}
   if (d.qtype) { const [c, q] = d.qtype.split('|'), qq = C(c).questions.find(x => x.id === q); if (qq) { qq.type = t.value; save(); rerenderCard(c); } return; }
   if (d.qphoto) { const [c, q] = d.qphoto.split('|'); attachImages(c, [...t.files], {kind: 'answer', qid: q}); t.value = ''; return; }
   if (d.acheck) { const [c, q] = d.acheck.split('|'); PR(c).ans[q] = t.checked ? 'Confirmed' : ''; save(); refreshCard(c); return; }
@@ -2533,12 +2557,12 @@ function fillIssues(c) {
   const a=[...(c.extra?.audit_notes||[])];
   if (c.lat==null || c.lon==null) a.push('Posted coordinates missing');
   if (!c.description) a.push('Listing description missing');
-  if (['Virtual','EarthCache'].includes(c.type) && !(c.questions||[]).length) a.push('Questions need preparation');
+  if (!isMetroTour(c.code) && ['Virtual','EarthCache'].includes(c.type) && !(c.questions||[]).length) a.push('Questions need preparation');
   if (['Multi','Puzzle'].includes(c.type) && !(c.stages||[]).length) a.push('Stages need preparation');
   if (c.auto_stages) a.push('Automatically suggested stages need review');
   const photoMissing=(c.questions||[]).filter(q=>q.type==='image' && !(c.images||[]).some(im=>im.qid===q.id));
   if(photoMissing.length) a.push(photoMissing.length+' photo task(s) have no attached photo');
-  const orphan = Object.keys(prog(c.code).ans||{}).filter(id=>!(c.questions||[]).some(q=>q.id===id));
+  const orphan = Object.keys(prog(c.code).ans||{}).filter(id=>!(c.questions||[]).some(q=>q.id===id)&&!(isMetroTour(c.code)&&/^q(?:[1-9]|1[0-6])$/.test(id)));
   if (orphan.length) a.push(orphan.length+' saved answer(s) have no matching question; retained in export');
   const orphanStages = Object.keys(prog(c.code).st||{}).filter(id=>!(c.stages||[]).some(s=>s.id===id));
   if (orphanStages.length) a.push(orphanStages.length+' saved stage(s) have no matching definition; retained in export');
@@ -3383,5 +3407,3 @@ requestNearbyLocation();
 </script>
 </body>
 </html>
-
-
