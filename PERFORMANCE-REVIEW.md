@@ -1,8 +1,8 @@
 # Performance and reliability review — 2026-11-10
 
-The review covered the standalone HTML app, its identical GitHub Pages copy, the Python listing scraper, existing browser regressions, documentation, and the text-save/image-pack compatibility path. Existing features, cache formulas, reveal rules, save formats and personal data files are preserved. The two updated HTML files remain byte-identical.
+The review covered the HTML app, Python listing scraper, browser regressions, documentation, and the text-save/image-pack compatibility path. Existing features, formulas, reveal rules, save formats and private data files are preserved.
 
-Locations below refer to `geocache-field.html` in the source repository and the same lines in `index.html` in the Pages repository.
+The sole maintained application source is now [public index.html](https://github.com/erinschief/geocache-field-site/blob/main/index.html). The former private HTML duplicate was removed. Historical line numbers below refer to the app implementation at the time of this review.
 
 ## Findings implemented
 
