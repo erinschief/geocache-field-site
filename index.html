@@ -1467,6 +1467,7 @@ async function animateCacheComplete(button,event){
  button.classList.add('cache-checked','cache-celebrate');button.setAttribute('aria-pressed','true');
  if(!reduced)await new Promise(resolve=>setTimeout(resolve,160));if(!button.isConnected)return;
  confetti(button,'cache');
+ if(!reduced)await new Promise(resolve=>setTimeout(resolve,450));
  button.setAttribute('aria-busy','false');
 }
 
