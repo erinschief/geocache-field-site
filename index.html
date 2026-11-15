@@ -508,16 +508,16 @@ function setMetroDone(i,done,from){
  p.st[id]={...p.st[id],done,in:p.st[id]?.in||{}};
  p.metro_order=done?(wasDone?order:[...order.filter(v=>v!==i),i]):order.filter(v=>v!==i);
  if(!done&&p.ans['q'+(i+1)]==='Photo will be attached to log!')p.ans['q'+(i+1)]='';
- if(done&&!wasDone&&from)confetti(from,'station');
- save();
  const control=from?.closest('.stagecomplete');
+ const celebration=done&&!wasDone&&from?confetti(control||from,control?'stage':'station'):0;
+ save();
  if(done&&!wasDone&&control){
   document.querySelectorAll(`[data-metro-check="${i}"]`).forEach(el=>el.checked=true);
   control.classList.remove('justdone');void control.offsetWidth;control.classList.add('justdone');
   control.closest('.stage')?.classList.add('sdone');
   const msg=control.querySelector('.stagemsg');if(msg)msg.innerHTML='<b>Stage completed</b><small>Nice work — progress saved</small>';
   try{navigator.vibrate?.(12);}catch(_){}
-  METRO_COMPLETE_TIMERS.set(i,setTimeout(()=>{METRO_COMPLETE_TIMERS.delete(i);if(C(METRO_CODE)){metroRefreshStationViews();renderDrawer();}},560));
+  METRO_COMPLETE_TIMERS.set(i,setTimeout(()=>{METRO_COMPLETE_TIMERS.delete(i);if(C(METRO_CODE)){metroRefreshStationViews();renderDrawer();}},Math.max(560,celebration||0)));
  }else metroRefreshStationViews();
 }
 
@@ -1421,6 +1421,7 @@ function paintNav() {
 }
 
 function confetti(from,mode='station') {
+ if(mode!=='station')return completionConfetti(from,mode==='stage');
  if(matchMedia('(prefers-reduced-motion: reduce)').matches || !from)return;
  const main=mode==='cache',r=from.getBoundingClientRect(),cv=document.createElement('canvas'),dpr=devicePixelRatio||1,g=cv.getContext('2d');if(!g)return;
  cv.dataset.celebration=main?'cache':'station';cv.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:10000';cv.width=innerWidth*dpr;cv.height=innerHeight*dpr;document.body.append(cv);g.scale(dpr,dpr);
@@ -1434,13 +1435,27 @@ function confetti(from,mode='station') {
  function tick(now){const age=(now-start)/1000,dt=Math.min(.04,(now-last)/1000);last=now;g.clearRect(0,0,innerWidth,innerHeight);for(const p of parts){if(age<p.delay)continue;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=(main?155:48)*dt;p.angle+=dt*4;g.save();g.translate(p.x,p.y);g.rotate(p.angle);g.globalAlpha=Math.max(0,1-(age-p.delay)/life);g.fillStyle=p.color;g.fillRect(-p.w/2,-p.h/2,p.w,p.h);g.restore();}if(age<life+.3)frame=requestAnimationFrame(tick);else{clearTimeout(timer);cleanup();}}frame=requestAnimationFrame(tick);
 }
 
-function celebrateCache(from){
- confetti(from,'cache');if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
- const r=from.getBoundingClientRect(),badge=document.createElement('div'),width=Math.min(320,innerWidth-32,Math.max(220,r.width));
- badge.className='stagecomplete justdone';badge.dataset.cacheCelebration='true';badge.setAttribute('role','status');
- badge.style.cssText=`position:fixed;left:${Math.max(16,Math.min(innerWidth-width-16,r.left))}px;top:${r.top}px;width:${width}px;box-sizing:border-box;margin:0;z-index:10001;pointer-events:none`;
- badge.innerHTML='<input type="checkbox" checked tabindex="-1" aria-hidden="true"><span class="stagecheck" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 10.5l4 4L16 6.5"/></svg></span><span class="stagemsg"><b>Cache logged</b><small>Progress saved</small></span>';
- document.body.append(badge);setTimeout(()=>badge.remove(),750);
+function completionConfetti(from, localOnly=false) {
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
+  const cv = document.createElement('canvas'), dpr = window.devicePixelRatio || 1, g = cv.getContext && cv.getContext('2d');
+  if (!g) return 0;
+  cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:10000';
+  cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; document.body.appendChild(cv); g.scale(dpr, dpr);
+  const cols = ['#2ecc71', '#f1c40f', '#e74c3c', '#3498db', '#9b59b6', '#ff8fd1', '#1abc9c', '#ff9f43'], P = [];
+  const burst = (x, y, n, a0, a1, sp) => { for (let k = 0; k < n; k++) { const a = a0 + Math.random() * (a1 - a0), v = sp * (0.5 + Math.random() * 0.6);
+    P.push({x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: 5 + Math.random() * 5, h: 3 + Math.random() * 4, r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.4, c: cols[k % cols.length], life: 0}); } };
+  const r = from.getBoundingClientRect();
+  burst(r.left + r.width / 2, r.top + r.height / 2, 110, -Math.PI * 0.9, -Math.PI * 0.1, 13);
+  if(!localOnly)setTimeout(() => { burst(0, innerHeight * 0.75, 50, -Math.PI * 0.45, -Math.PI * 0.1, 15); burst(innerWidth, innerHeight * 0.75, 50, -Math.PI * 0.9, -Math.PI * 0.55, 15); }, 180);
+  const t0 = performance.now();
+  const cleanup = setTimeout(() => cv.remove(), 2450);
+  (function tick(now) {
+    g.clearRect(0, 0, innerWidth, innerHeight);
+    P.forEach(p => { p.vy += 0.3; p.vx *= 0.992; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.life++;
+      g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.globalAlpha = Math.max(0, 1 - p.life / 130); g.fillStyle = p.c; g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); g.restore(); });
+    if (now - t0 < 2400) requestAnimationFrame(tick); else { clearTimeout(cleanup); cv.remove(); }
+  })(t0);
+  return 2400;
 }
 
 /* ================= images: blobs in IndexedDB, metadata in the cache record ================= */
@@ -2391,7 +2406,7 @@ document.addEventListener('click', async e => {
   if(act==='field-progress'||act==='field-undo'){
     const p=PR(code),previous={logged:!!p.logged,sent:!!p.sent,session:SESSION[code]};if(act==='field-undo'){if(p.logged)p.logged=false;else p.sent=false;delete SESSION[code];}
     else if(el.dataset.step==='sent')p.sent=true;else{p.logged=true;SESSION[code]=UI.scope.k;}
-    if(act==='field-progress'&&p.logged&&!previous.logged)celebrateCache(el);
+    if(act==='field-progress'&&p.logged&&!previous.logged)confetti(el,'cache');
     save();rerenderCard(code);renderDrawer();toast(p.logged?'Cache logged ✓':p.sent?'Answers sent ✓':'Last step undone',act==='field-progress'?()=>{const state=PR(code);state.logged=previous.logged;state.sent=previous.sent;if(previous.session===undefined)delete SESSION[code];else SESSION[code]=previous.session;save();rerenderCard(code);renderDrawer();toast('Last step undone');}:null);try{navigator.vibrate?.(15);}catch(_){}return;
   }
   if (act === 'mapfirst') { putCacheFirst(code,el); return; }
@@ -2574,11 +2589,12 @@ document.addEventListener('change', async e => {
     st.done = t.checked; save();
     if (t.checked) {
       const control = t.closest('.stagecomplete'), stage = t.closest('.stage'), msg = control && control.querySelector('.stagemsg');
+      const celebration=confetti(control||t,'stage');
       if (control) control.classList.add('justdone');
       if (stage) stage.classList.add('sdone');
       if (msg) msg.innerHTML = '<b>Stage completed</b><small>Nice work — progress saved</small>';
       try { if ('vibrate' in navigator) navigator.vibrate(12); } catch (_) {}
-      setTimeout(() => { rerenderCard(c); renderDrawer(); }, 560);
+      setTimeout(() => { if(t.isConnected && t.checked){rerenderCard(c); renderDrawer();} }, Math.max(560,celebration||0));
     } else { rerenderCard(c); renderDrawer(); }
     return;
   }
