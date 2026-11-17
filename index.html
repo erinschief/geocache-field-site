@@ -39,6 +39,7 @@ svg#map.panning{cursor:grabbing}
 #map [role="button"]:focus-visible{outline:none;filter:drop-shadow(0 0 3px var(--accent))}
 .mapselection{display:grid;gap:8px;padding:10px 0 4px}.mapselection .cachetitle{color:var(--text);overflow-wrap:anywhere}.mapselection .btns>*{flex:1 1 140px;text-align:center}.mapselection .viewcache{width:100%;text-align:center}
 .maplistpicker{width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);font:inherit}.maplistpicker[hidden]{display:none}
+.rowprogress{display:block;margin-top:3px}.nearbybar{position:relative;padding-right:36px;margin:0;color:var(--muted);font-size:12px}.nearbybar+h3{margin-top:4px}.nearbyrefresh{position:absolute;right:0;top:0;border:0;background:none;color:var(--muted);padding:3px;cursor:pointer;line-height:0}
 .cachelink{border:0;background:none;color:inherit;font:inherit;font-weight:700;text-align:left;padding:0;cursor:pointer}.row .idx{position:relative;font-size:24px;flex-basis:32px}.row[data-plan-kind="in"] .idx{font-size:16px}.cachecheck{position:absolute;right:-3px;bottom:-3px;border-radius:50%;background:var(--ok);color:#fff;font-size:12px;line-height:17px;width:17px}.completed-status{color:var(--ok);font-weight:700}.membership{display:flex;flex-direction:column;align-items:flex-end;gap:5px;font-size:12px}.membership span{overflow-wrap:anywhere}.rowtools{max-width:38%;display:flex;flex-direction:column;align-items:flex-end;gap:7px}.managecheck{display:flex;gap:8px;padding:9px 0;align-items:center}
 #cap{font-size:13px;color:var(--muted);min-height:20px;margin:6px 0}
 .lbl{fill:var(--muted);font-size:9px}
@@ -875,10 +876,10 @@ function distanceText(code) {
 }
 function nearbyHTML() {
   if(UI.tab==='plan' ? planTrip() : UI.scope.k==='trip' || UI.fieldCache) return '';
-  return `<div class="note"><span data-nearby-status>${nearbyStatus()}</span> <button class="btn sm" data-act="nearby-refresh">Enable location / refresh</button></div>`;
+  return `<div class="nearbybar"><span data-nearby-status>${nearbyStatus()}</span><button class="nearbyrefresh" data-act="nearby-refresh" aria-label="Refresh nearby caches" title="Enable location / refresh"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-3l2 3M4 16l2 3a8 8 0 0 0 13-3"/></svg></button></div>`;
 }
 function nearbyStatus() {
-  return NEARBY.error ? esc(NEARBY.error) : NEARBY.pos ? 'Nearby caches, not a route. Straight-line distances update as you move; refresh to reorder.' : esc(NEARBY.error || 'Finding your location… Use Enable location / refresh if your browser requires a tap.');
+  return NEARBY.error ? esc(NEARBY.error) : NEARBY.pos ? 'Nearby caches, not a route. Straight-line distances update as you move; refresh to reorder.' : esc(NEARBY.error || 'Finding your location… Use the refresh icon to enable location.');
 }
 function refreshNearbyLabels() {
   document.querySelectorAll('[data-distance]').forEach(el=>{el.textContent=distanceText(el.dataset.distance);});
@@ -898,16 +899,16 @@ function requestNearbyLocation(high=false) {
     const busy=document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') || document.querySelector('#map.panning') || !document.getElementById('modal').hidden;
     if(first && !busy && (UI.tab==='plan' ? !planTrip() : UI.scope.k!=='trip') && ['field','plan'].includes(UI.tab))render(); else refreshNearbyLabels();
   },e=>{
-    NEARBY.error=e.code===1?'Location denied. Allow location in browser settings; caches are shown by name.':NEARBY.pos?'Location update unavailable; showing the last known distances.':'Location unavailable; caches are shown by name. Use Refresh nearby order to retry.';
+    NEARBY.error=e.code===1?'Location denied. Allow location in browser settings; caches are shown by name.':NEARBY.pos?'Location update unavailable; showing the last known distances.':'Location unavailable; caches are shown by name. Use the refresh icon to retry.';
     NAV.err=NEARBY.error;refreshNearbyLabels();schedPaint();
   },{enableHighAccuracy:high,maximumAge:high?1000:15000,timeout:20000});
   NAV.watch=high?NEARBY.watch:null;
 }
 const SESSION = {};      // caches logged this session stay in the collection they were logged from until reload
-function scopeList() {
-  const s = UI.scope, all = Object.keys(DB.caches);
+function scopeList(s = UI.scope) {
+  const all = Object.keys(DB.caches);
   if (s.k === 'trip') { const t = DB.trips.find(x => x.id === s.id); return t ? t.codes.filter(c => DB.caches[c]) : []; }
-  if (s.k === 'all') return nearbyOrder(all.filter(c => !prog(c).logged || SESSION[c] === 'all'));
+  if (s.k === 'all') return nearbyOrder(all);
   if (s.k === 'inprog') return nearbyOrder(all.filter(c => unlisted(c) && ((started(c) && !prog(c).logged) || SESSION[c] === 'inprog')));
   if (s.k === 'logged') return all.filter(c => unlisted(c) && prog(c).logged);
   return nearbyOrder(all.filter(c => unlisted(c) && ((!started(c) && !prog(c).logged) || SESSION[c] === 'unstarted')));   // 'unstarted'
@@ -916,7 +917,7 @@ const listTitle = t => `${t.emoji || '🗺️'} ${t.name}`;
 function scopeName() {
   const s = UI.scope;
   if (s.k === 'trip') { const t = DB.trips.find(x => x.id === s.id); return t ? listTitle(t) : 'List'; }
-  return {all: 'All incomplete caches', inprog: 'In progress', unstarted: 'Not started', logged: 'Logged'}[s.k] || 'Not started';
+  return {all: 'All caches', inprog: 'In progress', unstarted: 'Not started', logged: 'Logged'}[s.k] || 'Not started';
 }
 function checkersOf(c) {
   const out = (c.checker || []).slice(), seen = new Set(out.map(x => x.url));
@@ -1730,12 +1731,12 @@ const mapProv = () => MAPS[UI.mapProvider] || MAPS.simple;
 function planMode() {
   const s = UI.planScope || {k: 'all'};
   if (s.k === 'trip') { const t = DB.trips.find(x => x.id === s.id); if (t) return {list: t}; }
-  return {coll: 'all'};
+  return {coll: ['inprog', 'unstarted'].includes(s.k) ? s.k : 'all'};
 }
 const planTrip = () => planMode().list || null;
 function planCodes() {
-  const t = planTrip();
-  return t ? t.codes.filter(c => C(c)) : nearbyOrder(Object.keys(DB.caches).filter(c => !prog(c).logged));
+  const mode = planMode();
+  return mode.list ? mode.list.codes.filter(c => C(c)) : scopeList({k: mode.coll});
 }
 const fieldCodes = () => UI.fieldCache && C(UI.fieldCache) ? [UI.fieldCache] : scopeList();
 function openPlanCache(code) {
@@ -1756,7 +1757,7 @@ function mapSVG() {
   const allC = codes.map(cachePosition);
   PLANMISSING = allC.filter(c => c.lat == null).length;
   const all = allC.filter(c => c.lat != null);
-  if (!codes.length) return `<div class="empty">${t ? 'This list has no caches yet.' : 'All saved caches are complete.'}</div>`;
+  if (!codes.length) return `<div class="empty">${t ? 'This list has no caches yet.' : 'No caches in this collection.'}</div>`;
   if (!all.length) return '<div class="empty">None of these caches has coordinates yet.</div>';
   // A selected trip contains only its own caches; the overview contains every incomplete cache.
   const pts = all;
@@ -1764,8 +1765,8 @@ function mapSVG() {
   const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
   let autoZ = Math.min(17, prov.max);
   for (; autoZ > 3; autoZ--) { if (Math.max(mercX(maxLon, autoZ) - mercX(minLon, autoZ), mercY(minLat, autoZ) - mercY(maxLat, autoZ)) <= 560) break; }
-  const zoom = Math.max(3, Math.min(22, autoZ + PLANZOOM)), z = Math.min(prov.max, Math.floor(zoom)), scale = 2 ** (zoom - z), pad = 90;
-  const vbw = Math.max(mercX(maxLon, autoZ) - mercX(minLon, autoZ) + 2 * pad, 420) / scale, vbh = Math.max(mercY(minLat, autoZ) - mercY(maxLat, autoZ) + 2 * pad, 320) / scale;
+  const zoom = Math.max(3, Math.min(22, autoZ + PLANZOOM)), z = Math.min(prov.max, Math.floor(zoom)), scale = 2 ** (zoom - z), pad = 30;
+  const vbw = Math.max(mercX(maxLon, autoZ) - mercX(minLon, autoZ) + 2 * pad, 260) / scale, vbh = Math.max(mercY(minLat, autoZ) - mercY(maxLat, autoZ) + 2 * pad, 240) / scale;
   const cx = (mercX(minLon, z) + mercX(maxLon, z)) / 2 + PLANPAN.x * vbw, cy = (mercY(minLat, z) + mercY(maxLat, z)) / 2 + PLANPAN.y * vbh;
   const x0 = cx - vbw / 2, y0 = cy - vbh / 2, k = vbw / 380, X = lo => mercX(lo, z), Y = la => mercY(la, z);
   let s = `<svg id="map" data-z="${z}" data-autoz="${autoZ}" data-center-x="${(mercX(minLon, z) + mercX(maxLon, z)) / 2}" data-center-y="${(mercY(minLat, z) + mercY(maxLat, z)) / 2}" data-basew="${vbw * scale}" data-vbw="${vbw}" data-vbh="${vbh}" viewBox="${x0} ${y0} ${vbw} ${vbh}" xmlns="http://www.w3.org/2000/svg">`;
@@ -1789,7 +1790,7 @@ function mapSVG() {
       : `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${col}" stroke-width="${2.4*k}"/>`;
     const label = `${c.name} · ${c.code}${inProgress ? ' · In progress' : ''}${memberships.length ? ' · '+memberships.map(listTitle).join(', ') : ''}`;
     s += `<g data-act="mapmark" data-code="${c.code}" data-x="${x}" data-y="${y}" role="button" tabindex="0" aria-label="${esc(label)}" aria-pressed="${PLANFOCUS === c.code}" style="cursor:pointer"><title>${esc(label)}</title><circle cx="${x}" cy="${y}" r="${17*k}" fill="transparent"/>`;
-    s += shape(t ? col : 'var(--card)');
+    s += shape(t || prog(c.code).logged ? col : 'var(--card)');
     if (!t && inProgress) {
       const clip = 'map-half-' + markerIndex;
       s += `<defs><clipPath id="${clip}"><rect x="${x-r*1.5}" y="${y-r*1.5}" width="${r*1.5}" height="${r*3}"/></clipPath></defs><g data-progress="half" clip-path="url(#${clip})">${shape(col)}</g>`;
@@ -1889,7 +1890,7 @@ function planRow(code, i, kind) {
   const noc = c.lat == null ? ' · <span class="warn" style="display:inline">no coordinates</span>' : '';
   const status = statusLine(code).replace(/(?: · )?logged$/, '');
   return `<div class="row ${PLANFOCUS === code ? 'focus' : ''}" data-plan-code="${code}" data-plan-kind="${kind}">${kind === 'in' ? `<button class="grab" data-drag="${code}" aria-label="Drag ${esc(c.name)} to reorder" title="Drag to reorder">⠿</button>` : ''}<span class="idx">${kind === 'in' ? i + 1 : emo(c.type)}${done ? '<span class="cachecheck" aria-label="Complete">✓</span>' : ''}</span>
-    <div class="rt"><b><button class="cachelink" data-act="view-cache" data-code="${code}">${esc(c.name)}</button></b><small>${esc(c.type)} · ${esc(c.code)} <span data-distance="${code}">${esc(distanceText(code))}</span>${status ? ' · ' + esc(status) : ''}${done ? ' · <span class="completed-status">Complete</span>' : ''}${noc}</small></div>
+    <div class="rt"><b><button class="cachelink" data-act="view-cache" data-code="${code}">${esc(c.name)}</button></b><small>${esc(c.type)} · ${esc(c.code)} <span data-distance="${code}">${esc(distanceText(code))}</span>${noc}</small>${status || done ? `<small class="rowprogress">${esc(status)}${done ? `${status ? ' · ' : ''}<span class="completed-status">Complete</span>` : ''}</small>` : ''}</div>
     ${kind === 'in' ? `<button class="btn sm" data-act="toggleSel" data-code="${code}" aria-label="Remove from this list" title="Tap twice to remove from this list">✕</button>`
       : kind === 'out' ? `<button class="btn sm" data-act="toggleSel" data-code="${code}">+</button>`
       : lists.length ? `<div class="rowtools"><div class="membership">${lists.map(t=>`<span>${esc(listTitle(t))}</span>`).join('')}</div><button class="btn sm" data-act="manage-lists" data-code="${code}" aria-label="Manage lists for ${esc(c.name)}" title="Manage lists">${manageListIcon}</button></div>`
@@ -1898,10 +1899,10 @@ function planRow(code, i, kind) {
 function renderPlan() {
   NEARBY.orderPos=NEARBY.pos?[NEARBY.pos.latitude,NEARBY.pos.longitude]:null;
   if (!Object.keys(DB.caches).length) { $('#app').innerHTML = `<div class="panel empty"><h1>No caches yet</h1><p>Use the ⇄ button at the top right to import a save, a Playwright export or a single cache.</p></div>`; return; }
-  const t = planTrip(), codes = planCodes(), prov = mapProv();
+  const mode = planMode(), t = planTrip(), codes = planCodes(), prov = mapProv();
   if (PLANFOCUS && !codes.includes(PLANFOCUS)) PLANFOCUS = null;
-  const f = PLANFOCUS && C(PLANFOCUS), loose = nearbyOrder(Object.keys(DB.caches).filter(unlisted));
-  const listed = t ? [] : nearbyOrder(Object.keys(DB.caches).filter(c => !unlisted(c))), map = mapSVG();
+  const f = PLANFOCUS && C(PLANFOCUS), loose = nearbyOrder(Object.keys(DB.caches).filter(c => unlisted(c) && (t || mode.coll === 'all' || codes.includes(c))));
+  const listed = t || mode.coll !== 'all' ? [] : nearbyOrder(Object.keys(DB.caches).filter(c => !unlisted(c))), map = mapSVG();
   const body = (t ? `
     <div class="btns"><button class="btn" data-act="auto">Auto-order (nearest next)</button><button class="btn" data-act="clearplan">Empty this list</button></div>
     <h3>${esc(listTitle(t))} (${t.codes.length}${t.codes.length > 1 ? ' · ≈' + routeMiles(t.codes).toFixed(1) + ' mi straight-line' : ''})</h3>
@@ -1911,7 +1912,9 @@ function renderPlan() {
   $('#app').innerHTML = `
   <div class="panel"><div class="triprow">
       <select id="planscope" aria-label="What to plan">
-        <option value="all" ${!t ? 'selected' : ''}>All incomplete caches (${Object.keys(DB.caches).filter(c => !prog(c).logged).length})</option>
+        <option value="all" ${!t && mode.coll === 'all' ? 'selected' : ''}>All caches (${Object.keys(DB.caches).length})</option>
+        <option value="inprog" ${mode.coll === 'inprog' ? 'selected' : ''}>In progress (${scopeList({k:'inprog'}).length})</option>
+        <option value="unstarted" ${mode.coll === 'unstarted' ? 'selected' : ''}>Not started (${scopeList({k:'unstarted'}).length})</option>
         ${DB.trips.length ? `<optgroup label="Lists">${DB.trips.map(x => `<option value="trip:${x.id}" ${t?.id === x.id ? 'selected' : ''}>${esc(listTitle(x))} (${x.codes.length})</option>`).join('')}</optgroup>` : ''}</select>
       ${t ? `<button class="btn sm" data-act="tripedit" data-id="${t.id}">Edit</button>` : ''}</div>
     <div class="mapwrap">${map}${map.startsWith('<svg') ? `<button class="mapfit" data-act="autozoom" aria-label="Fit all caches" title="Fit all caches"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/></svg></button>` : ''}</div>
@@ -2703,7 +2706,7 @@ document.addEventListener('change', async e => {
     save(); render(); tripUndo(trip, before, 'Added to ' + trip.name); return;
   }
   if (t.id === 'planscope') {
-    UI.planScope = t.value.startsWith('trip:') ? {k: 'trip', id: t.value.slice(5)} : {k: 'all'};
+    UI.planScope = t.value.startsWith('trip:') ? {k: 'trip', id: t.value.slice(5)} : {k: ['inprog','unstarted'].includes(t.value) ? t.value : 'all'};
     UI.scope = {...UI.planScope}; UI.fieldCache = null;
     if (UI.planScope.k === 'trip') UI.planTrip = UI.planScope.id;
     PLANFOCUS = null; TOP_CONFIRM = null; ARMED = ''; PLANZOOM = 0; PLANPAN = {x: 0, y: 0}; save(); render(); return;

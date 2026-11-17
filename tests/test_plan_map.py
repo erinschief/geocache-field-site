@@ -73,7 +73,7 @@ def run_flow(browser, origin, touch):
     page.evaluate('(data)=>localStorage.setItem("gfs2",JSON.stringify(data))', fixture())
     page.reload()
     expect(page.locator('#planscope')).to_have_value('all')
-    assert map_codes(page) == {'GCONE', 'GCTWO', 'GCLOOSE', 'GCOTHER'}
+    assert map_codes(page) == {'GCONE', 'GCTWO', 'GCLOOSE', 'GCOTHER', 'GCDONE'}
     assert page.locator('#map polyline').count() == 0
     assert page.locator('#map text:not([data-list-icon])').count() == 0
     expect(marker(page, 'GCTWO').locator('[data-progress="half"]')).to_have_count(1)
@@ -144,7 +144,7 @@ def run_flow(browser, origin, touch):
     expect(page.locator('#card-GCLOOSE')).to_have_count(1)
     # List browsing shows exactly that route, including completed members.
     page.locator('#t-plan').click()
-    assert 'GCLOOSE' not in map_codes(page)
+    assert 'GCLOOSE' in map_codes(page)
     select_trip(page, 'trip:walk')
     page.locator('#t-field').click()
     expect(page.locator('#chips button')).to_have_count(3)
@@ -263,10 +263,30 @@ def run_edges(browser, origin):
     completed = page.locator('[data-plan-code="GCDONE"]')
     expect(completed.locator('.cachecheck')).to_have_text('✓')
     expect(completed.locator('.completed-status')).to_have_text('Complete')
-    assert completed.locator('small').inner_text().count('🟢') == 0
+    assert completed.locator('small').first.inner_text().count('🟢') == 0
+    # Progress always occupies its own line, for every cache type with stages.
+    for kind in ['Virtual', 'EarthCache', 'Multi', 'Puzzle', 'Traditional', 'Letterbox Hybrid']:
+        page.evaluate("kind=>{DB.caches.GCONE.type=kind;DB.caches.GCONE.stages=[{id:'s1',inputs:[]}];renderPlan()}", kind)
+        row = page.locator('[data-plan-code="GCONE"]')
+        expect(row.locator('.rowprogress')).to_contain_text('Stage 1/1')
+        details, progress = row.locator('.rt>small').nth(0).bounding_box(), row.locator('.rowprogress').bounding_box()
+        assert progress['y'] >= details['y'] + details['height']
+    refresh = page.get_by_role('button', name='Refresh nearby caches')
+    assert refresh.inner_text() == ''
+    assert refresh.bounding_box()['x'] > page.locator('.nearbybar').bounding_box()['x']
+    # Automatic Plan filters use the same unlisted collections as the sidebar and Field.
+    page.evaluate("PR('GCLOOSE').notes='Started';save()")
+    select_trip(page, 'inprog')
+    assert map_codes(page) == {'GCLOOSE', 'GCTWO'}
+    page.locator('#t-field').click()
+    expect(page.locator('#card-GCLOOSE')).to_have_count(1)
+    page.locator('#t-plan').click()
+    select_trip(page, 'unstarted')
+    assert map_codes(page) == {'GCONE', 'GCOTHER'}
+    select_trip(page, 'all')
     # Completed-only and coordinate-less libraries give accurate empty states.
     page.evaluate("Object.keys(DB.caches).forEach(c=>PR(c).logged=true); renderPlan()")
-    expect(page.locator('.mapwrap')).to_contain_text('All saved caches are complete')
+    assert map_codes(page) == {'GCONE', 'GCTWO', 'GCLOOSE', 'GCOTHER', 'GCDONE'}
     page.evaluate("DB.trips=[{id:'empty',name:'Empty',codes:[]}]; UI.planScope={k:'trip',id:'empty'};renderPlan()")
     expect(page.locator('.mapwrap')).to_contain_text('This list has no caches yet')
     page.evaluate("DB.trips[0].codes=['GCMISSING'];renderPlan()")
