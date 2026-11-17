@@ -287,6 +287,23 @@ def run_edges(browser, origin):
     select_trip(page, 'unstarted')
     assert map_codes(page) == {'GCONE', 'GCOTHER'}
     select_trip(page, 'all')
+    # Vertical/horizontal/one-point trips retain the same frame and fit every marker.
+    previous_size = None
+    routes = [[(38.6,-77),(39.2,-77.001)], [(38.9,-77.5),(38.901,-76.8)], [(38.9,-77),(38.9,-77)]]
+    for width, locations in [(width, route) for width in (390,1280) for route in routes]:
+        if page.viewport_size['width'] != width:
+            page.set_viewport_size({'width':width,'height':844})
+            previous_size = None
+        page.evaluate("locations=>{['GCONE','GCTWO'].forEach((c,i)=>{DB.caches[c].lat=locations[i][0];DB.caches[c].lon=locations[i][1];});DB.trips=[{id:'shape',name:'Route shape',codes:['GCONE','GCTWO']}];UI.planScope={k:'trip',id:'shape'};PLANPAN={x:0,y:0};PLANZOOM=0;renderPlan()}", locations)
+        box = page.locator('#map').bounding_box()
+        assert abs(box['width']-box['height']) < 1
+        if previous_size:
+            assert abs(box['height']-previous_size) < 1
+        previous_size = box['height']
+        assert page.locator('#map').evaluate("el=>{const v=el.viewBox.baseVal;return [...el.querySelectorAll('[data-act=mapmark]')].every(m=>+m.dataset.x>v.x && +m.dataset.x<v.x+v.width && +m.dataset.y>v.y && +m.dataset.y<v.y+v.height)}")
+        page.get_by_role('button', name='Fit all caches', exact=True).click()
+        assert abs(page.locator('#map').bounding_box()['height']-box['height']) < 1
+    page.evaluate("UI.planScope={k:'all'};renderPlan()")
     # Completed-only and coordinate-less libraries give accurate empty states.
     page.evaluate("Object.keys(DB.caches).forEach(c=>PR(c).logged=true); renderPlan()")
     assert map_codes(page) == {'GCONE', 'GCTWO', 'GCLOOSE', 'GCOTHER', 'GCDONE'}

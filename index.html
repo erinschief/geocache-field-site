@@ -33,9 +33,9 @@ h1{font-size:18px;margin:4px 0 8px}
 .btn.danger{color:#b42318;border-color:#d92d20;background:color-mix(in srgb,#d92d20 7%,var(--card))}
 .btn.sm{padding:5px 9px;font-size:13px}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
-svg#map{width:100%;height:auto;display:block;border-radius:10px;background:var(--bg);border:1px solid var(--line);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+svg#map{width:100%;height:auto;aspect-ratio:1;display:block;border-radius:10px;background:var(--bg);border:1px solid var(--line);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
 svg#map.panning{cursor:grabbing}
-.mapwrap{position:relative}.mapfit{position:absolute;right:10px;bottom:10px;display:grid;place-items:center;width:44px;height:44px;padding:10px;border:0;background:transparent;color:var(--muted);filter:drop-shadow(0 1px 1px var(--card));cursor:pointer}
+.mapwrap{position:relative;overflow:hidden;border-radius:10px}.mapfit{position:absolute;right:10px;bottom:10px;display:grid;place-items:center;width:44px;height:44px;padding:10px;border:0;background:transparent;color:var(--muted);filter:drop-shadow(0 1px 1px var(--card));cursor:pointer}
 #map [role="button"]:focus-visible{outline:none;filter:drop-shadow(0 0 3px var(--accent))}
 .mapselection{display:grid;gap:8px;padding:10px 0 4px}.mapselection .cachetitle{color:var(--text);overflow-wrap:anywhere}.mapselection .btns>*{flex:1 1 140px;text-align:center}.mapselection .viewcache{width:100%;text-align:center}
 .maplistpicker{width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);font:inherit}.maplistpicker[hidden]{display:none}
@@ -1759,14 +1759,16 @@ function mapSVG() {
   const all = allC.filter(c => c.lat != null);
   if (!codes.length) return `<div class="empty">${t ? 'This list has no caches yet.' : 'No caches in this collection.'}</div>`;
   if (!all.length) return '<div class="empty">None of these caches has coordinates yet.</div>';
-  // A selected trip contains only its own caches; the overview contains every incomplete cache.
+  // Fit the selected caches inside a stable map frame, regardless of route direction.
   const pts = all;
   const lats = pts.map(c => c.lat), lons = pts.map(c => c.lon);
   const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
   let autoZ = Math.min(17, prov.max);
   for (; autoZ > 3; autoZ--) { if (Math.max(mercX(maxLon, autoZ) - mercX(minLon, autoZ), mercY(minLat, autoZ) - mercY(maxLat, autoZ)) <= 560) break; }
   const zoom = Math.max(3, Math.min(22, autoZ + PLANZOOM)), z = Math.min(prov.max, Math.floor(zoom)), scale = 2 ** (zoom - z), pad = 30;
-  const vbw = Math.max(mercX(maxLon, autoZ) - mercX(minLon, autoZ) + 2 * pad, 260) / scale, vbh = Math.max(mercY(minLat, autoZ) - mercY(maxLat, autoZ) + 2 * pad, 240) / scale;
+  // Keep the SVG viewport square; expand its bounds to fit the longer route axis.
+  const baseSize = Math.max(mercX(maxLon, autoZ) - mercX(minLon, autoZ), mercY(minLat, autoZ) - mercY(maxLat, autoZ), 200) + 2 * pad;
+  const vbw = baseSize / scale, vbh = vbw;
   const cx = (mercX(minLon, z) + mercX(maxLon, z)) / 2 + PLANPAN.x * vbw, cy = (mercY(minLat, z) + mercY(maxLat, z)) / 2 + PLANPAN.y * vbh;
   const x0 = cx - vbw / 2, y0 = cy - vbh / 2, k = vbw / 380, X = lo => mercX(lo, z), Y = la => mercY(la, z);
   let s = `<svg id="map" data-z="${z}" data-autoz="${autoZ}" data-center-x="${(mercX(minLon, z) + mercX(maxLon, z)) / 2}" data-center-y="${(mercY(minLat, z) + mercY(maxLat, z)) / 2}" data-basew="${vbw * scale}" data-vbw="${vbw}" data-vbh="${vbh}" viewBox="${x0} ${y0} ${vbw} ${vbh}" xmlns="http://www.w3.org/2000/svg">`;
