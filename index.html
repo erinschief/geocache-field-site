@@ -1751,6 +1751,7 @@ function openPlanCache(code) {
 const WORLD = z => 256 * 2 ** z;
 const mercX = (lon, z) => (lon + 180) / 360 * WORLD(z);
 const mercY = (lat, z) => { const s = Math.sin(Math.max(-85, Math.min(85, lat)) * Math.PI / 180); return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * WORLD(z); };
+let MAPTAP = null;
 let PLANFOCUS = null, PLANMISSING = 0, PLANZOOM = 0, PLANPAN = {x: 0, y: 0}, MAPMOVED = false;
 function mapSVG() {
   const mode = planMode(), t = mode.list || null, prov = mapProv(), codes = planCodes();
@@ -1829,8 +1830,9 @@ function bindMapGestures() {
   svg.addEventListener('pointerdown', e => {
     if (e.button !== 0 || points.size >= 2) return;
     if (!points.size) { MAPMOVED = false; changed = false; }
+    if (!e.target.closest('[data-act="mapmark"]')) MAPTAP = null;
     points.set(e.pointerId, {x:e.clientX, y:e.clientY});
-    if (points.size === 2) { MAPMOVED = true; changed = true; svg.classList.add('panning'); }
+    if (points.size === 2) { MAPTAP = null; MAPMOVED = true; changed = true; svg.classList.add('panning'); }
     rebase();
   });
   svg.addEventListener('pointermove', e => {
@@ -1838,7 +1840,7 @@ function bindMapGestures() {
     points.set(e.pointerId, {x:e.clientX, y:e.clientY});
     const ps = [...points.values()].slice(0,2), mid = middle(ps), b = baseline;
     if (points.size === 1 && !changed && Math.hypot(mid.x-b.mid.x, mid.y-b.mid.y) <= 5) return;
-    e.preventDefault(); MAPMOVED = true; changed = true; svg.classList.add('panning');
+    e.preventDefault(); MAPTAP = null; MAPMOVED = true; changed = true; svg.classList.add('panning');
     try { svg.setPointerCapture(e.pointerId); } catch (_) {}
     const dist = ps.length === 2 ? Math.hypot(ps[1].x-ps[0].x, ps[1].y-ps[0].y) : 0;
     let scale = b.distance && dist ? b.distance/dist : 1;
@@ -1854,7 +1856,7 @@ function bindMapGestures() {
   svg.addEventListener('pointerup', finish); svg.addEventListener('pointercancel', finish);
   svg.addEventListener('lostpointercapture', e => { if (e.target === svg && !svg.hasPointerCapture(e.pointerId)) finish(e); });
   svg.addEventListener('wheel', e => {
-    e.preventDefault(); if (points.size) return;
+    e.preventDefault(); MAPTAP = null; if (points.size) return;
     const v = view(), anchor = world({x:e.clientX,y:e.clientY},svg.getScreenCTM().inverse());
     const zoom = +svg.dataset.z + Math.log2(+svg.dataset.basew/v[2]);
     const next = Math.max(3,Math.min(22,zoom - e.deltaY*(e.ctrlKey ? 0.01 : 0.003)));
@@ -1862,7 +1864,7 @@ function bindMapGestures() {
     svg.setAttribute('viewBox', `${anchor.x+(v[0]-anchor.x)*scale} ${anchor.y+(v[1]-anchor.y)*scale} ${v[2]*scale} ${v[3]*scale}`);
     changed = true; commit();
   }, {passive:false});
-  svg.addEventListener('dblclick', e => { e.preventDefault(); PLANZOOM = 0; PLANPAN = {x:0,y:0}; renderPlan(); });
+  svg.addEventListener('dblclick', e => { e.preventDefault(); if(e.target.closest('[data-act="mapmark"]'))return; MAPTAP=null; PLANZOOM = 0; PLANPAN = {x:0,y:0}; renderPlan(); });
 }
 function routeMiles(codes) { const r = codes.map(cachePosition).filter(c => c && c.lat != null); let m = 0; for (let i = 1; i < r.length; i++) m += hav([r[i - 1].lat, r[i - 1].lon], [r[i].lat, r[i].lon]); return m; }
 function tripUndo(t,before,message){const id=t.id;toast(message,()=>{const trip=DB.trips.find(v=>v.id===id);if(!trip)return;trip.codes=before.filter(c=>C(c));save();render();toast('List change undone');});}
@@ -2462,7 +2464,9 @@ function stagesModal(code) {
     <div class="btns" style="margin-top:12px"><button class="btn pri" data-act="savestages" data-code="${code}">Save</button><button class="btn" data-act="closemodal">Cancel</button></div>`);
 }
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-act]'); if (!el) return;
+  const el = e.target.closest('[data-act]');
+  if (el?.dataset.act !== 'mapmark') MAPTAP = null;
+  if (!el) return;
   const act = el.dataset.act, code = el.dataset.code, g = id => document.getElementById(id);
   if (act === 'drawer') { DRAWER = !DRAWER; renderDrawer(); return; }
   if (act === 'tab') { UI.tab = el.dataset.tab; DRAWER = false; save(); render(); window.scrollTo(0, 0); return; }
@@ -2480,7 +2484,15 @@ document.addEventListener('click', async e => {
   if (act === 'zoomin') { PLANZOOM = Math.min(4, PLANZOOM + 1); renderPlan(); return; }
   if (act === 'zoomout') { PLANZOOM = Math.max(-2, PLANZOOM - 1); renderPlan(); return; }
   if (act === 'autozoom') { PLANZOOM = 0; PLANPAN = {x:0,y:0}; renderPlan(); return; }
-  if (act === 'mapmark') { if (MAPMOVED) return; PLANFOCUS = code; renderPlan(); return; }
+  if (act === 'mapmark') {
+    if (MAPMOVED) { MAPTAP=null; return; }
+    const now=performance.now(), scope=JSON.stringify(UI.planScope), last=MAPTAP;
+    if (e.detail && last && last.code===code && last.scope===scope && now-last.at<=400 && Math.hypot(e.clientX-last.x,e.clientY-last.y)<=24) {
+      MAPTAP=null; openPlanCache(code); return;
+    }
+    MAPTAP=e.detail?{code,scope,at:now,x:e.clientX,y:e.clientY}:null;
+    PLANFOCUS = code; renderPlan(); return;
+  }
   if (act === 'view-cache') { openPlanCache(code); return; }
 
   if (act === 'nearby-refresh') { NEARBY.orderPos=NEARBY.pos?[NEARBY.pos.latitude,NEARBY.pos.longitude]:null; { if(NEARBY.watch!=null)navigator.geolocation.clearWatch(NEARBY.watch); NEARBY.watch=null; requestNearbyLocation(NEARBY.high); } render(); return; }

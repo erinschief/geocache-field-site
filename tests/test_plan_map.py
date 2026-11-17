@@ -252,6 +252,35 @@ def run_flow(browser, origin, touch):
     context.close()
 
 
+def run_double_tap(browser, origin, touch):
+    context = browser.new_context(viewport={'width':390 if touch else 1280,'height':844}, is_mobile=touch, has_touch=touch, reduced_motion='reduce')
+    page = context.new_page()
+    page.goto(origin)
+    page.evaluate('(data)=>localStorage.setItem("gfs2",JSON.stringify(data))', fixture())
+    page.reload()
+    click_marker(page, 'GCONE', touch)
+    expect(page.locator('#t-plan')).to_have_class('on')
+    click_marker(page, 'GCTWO', touch)
+    expect(page.locator('#t-plan')).to_have_class('on')
+    page.wait_for_timeout(450)
+    click_marker(page, 'GCTWO', touch)
+    expect(page.locator('#t-plan')).to_have_class('on')
+    click_marker(page, 'GCTWO', touch)
+    expect(page.locator('#t-field')).to_have_class('on')
+    expect(page.locator('#chips')).to_have_text('Single cache view')
+    expect(page.locator('article.card')).to_have_count(1)
+    expect(page.locator('#card-GCTWO')).to_be_visible()
+    page.locator('#t-plan').click()
+    select_trip(page, 'trip:walk')
+    click_marker(page, 'GCTWO', touch)
+    expect(page.locator('#t-plan')).to_have_class('on')
+    click_marker(page, 'GCTWO', touch)
+    expect(page.locator('#t-field')).to_have_class('on')
+    expect(page.locator('#chips button')).to_have_count(2)
+    expect(page.locator('#card-GCTWO')).to_be_in_viewport()
+    context.close()
+
+
 def run_edges(browser, origin):
     context = browser.new_context(reduced_motion='reduce')
     page = context.new_page()
@@ -328,6 +357,7 @@ if __name__ == '__main__':
             browser = p.chromium.launch(executable_path=os.getenv('CHROMIUM_PATH', '/usr/bin/chromium'), args=['--no-sandbox'])
             for touch in (False, True):
                 run_flow(browser, origin, touch)
+                run_double_tap(browser, origin, touch)
                 print(f'{"Mobile" if touch else "Desktop"} map and field flow passed')
             run_edges(browser, origin)
             print('Empty, completed-only, no-list and missing-coordinate cases passed')
