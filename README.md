@@ -11,11 +11,11 @@ See [PERFORMANCE-REVIEW.md](PERFORMANCE-REVIEW.md) for the performance and relia
 
 ## Planning on the map
 
-Plan starts with **All incomplete caches**, including caches already in lists. Unstarted markers are hollow; in-progress markers have their left half filled. A list’s emoji appears beside its caches. Choose a list to show only that trip’s numbered route. **Not in a list** remains available below the map.
+Plan starts with **All incomplete caches**, including caches already in lists. Unstarted markers are hollow; in-progress markers have their left half filled. A list’s emoji appears over its cache’s colored shape. Choose a list to show only that trip’s numbered route. **Not in a list** remains available below the map.
 
-Tap a marker to select it, then use **View cache details** to open Field. In the overview, **Add to list** opens a selector for your existing lists. With a trip selected, **Move to top of list** keeps its confirmation step. Removing a cache with ✕ in the reorder rows requires two taps within four seconds and offers Undo; the saved cache stays in your library. The corner icon fits the map to the current selection.
+Tap a marker to select it, then use **View cache details** to open Field. In the overview, **Add to list** is a dropdown selector for your existing lists. Cache titles open Field details; listed rows show their memberships and a Manage lists control. Completed rows show a green label and check badge. With a trip selected, **Move to top of list** keeps its confirmation step. Removing a cache with ✕ in the reorder rows requires two taps within four seconds and offers Undo; the saved cache stays in your library. The corner icon fits the map to the current selection.
 
-Opening details from the overview creates a persistent **Single cache view**. Editing, logging, switching tabs and reloading keep that cache open. Choose a collection or list in the menu to return to its Field view. Plan’s selection is saved separately from Field’s selection.
+Opening details from the overview creates a persistent **Single cache view**. Editing, logging, switching tabs and reloading keep that cache open. Choose a collection or list in the menu to return to its Field view. Changing the Plan filter also selects that list or the incomplete-cache overview in Field.
 
 ## Map regressions
 

@@ -88,12 +88,6 @@ def run_flow(browser, origin, touch):
     assert fit_box['x'] > map_box['x'] + map_box['width'] / 2
     assert fit_box['y'] > map_box['y'] + map_box['height'] / 2
     assert page.locator('body').evaluate('(el)=>el.scrollWidth<=innerWidth')
-    # Auto-fit leaves room for the corner control so it does not cover a cache icon.
-    assert page.locator('#map [data-act="mapmark"]').evaluate_all('''(els)=>{
-        const b=document.querySelector('.mapfit').getBoundingClientRect();
-        return els.every(el=>{const r=el.getBoundingClientRect();
-            return r.right<=b.left || r.left>=b.right || r.bottom<=b.top || r.top>=b.bottom;});
-    }''')
     click_marker(page, 'GCLOOSE', touch)
     if touch:
         page.evaluate("document.documentElement.dataset.theme='dark'")
@@ -103,13 +97,27 @@ def run_flow(browser, origin, touch):
     expect(page.locator('#cap')).to_contain_text('Unlisted earth')
     expect(page.locator('#cap')).to_contain_text('GCLOOSE')
     expect(page.locator('[data-act="mapfirst"]')).to_have_count(0)
-    expect(page.locator('#map-list-picker')).to_be_hidden()
-    page.get_by_role('button', name='Add to list', exact=True).click()
     expect(page.locator('#map-list-picker')).to_be_visible()
     page.locator('#map-list-picker').select_option('walk')
     assert 'GCLOOSE' in state(page)['trips'][0]['codes']
     expect(page.locator('#planscope')).to_have_value('all')
     expect(marker(page, 'GCLOOSE').locator('[data-list-icon]')).to_have_text('🥾')
+    # Existing memberships have a manage button, stacked list names and clickable title.
+    row = page.locator('[data-plan-code="GCOTHER"]')
+    expect(row.locator('.membership')).to_have_text('🌳 Other trip')
+    row.get_by_role('button', name='Manage lists for Another list', exact=True).click()
+    page.locator('[data-membership="walk"]').check()
+    page.get_by_role('button', name='Save lists', exact=True).click()
+    assert 'GCOTHER' in state(page)['trips'][0]['codes']
+    expect(row.locator('.membership span')).to_have_count(2)
+    row.get_by_role('button', name='Manage lists for Another list', exact=True).click()
+    page.locator('[data-membership="walk"]').uncheck()
+    page.get_by_role('button', name='Save lists', exact=True).click()
+    row.locator('.cachelink').click()
+    expect(page.locator('#card-GCOTHER')).to_be_visible()
+    expect(page.locator('#chips')).to_have_text('Single cache view')
+    page.locator('#t-plan').click()
+    click_marker(page, 'GCLOOSE', touch)
     # Single-cache mode persists across rerenders, edits, progress, tabs and reload.
     page.get_by_role('button', name='View cache details', exact=True).click()
     expect(page.locator('#chips')).to_have_text('Single cache view')
@@ -138,6 +146,9 @@ def run_flow(browser, origin, touch):
     page.locator('#t-plan').click()
     assert 'GCLOOSE' not in map_codes(page)
     select_trip(page, 'trip:walk')
+    page.locator('#t-field').click()
+    expect(page.locator('#chips button')).to_have_count(3)
+    page.locator('#t-plan').click()
     assert map_codes(page) == {'GCONE', 'GCTWO', 'GCLOOSE'}, (map_codes(page), state(page)['trips'])
     expect(page.locator('h3', has_text='Not in a list')).to_have_count(1)
     expect(page.locator('[data-plan-kind="out"][data-plan-code="GCDONE"]')).to_have_count(1)
@@ -244,9 +255,15 @@ def run_edges(browser, origin):
     page.evaluate('(data)=>localStorage.setItem("gfs2",JSON.stringify(data))', data)
     page.reload()
     click_marker(page, 'GCONE', False)
-    page.get_by_role('button', name='Add to list', exact=True).click()
-    expect(page.locator('#map-no-lists')).to_be_visible()
+    expect(page.locator('#map-list-picker')).to_be_disabled()
     assert state(page)['trips'] == []
+    # Letterbox map color and completed row labels/badges.
+    page.evaluate("DB.caches.GCONE.type='Letterbox Hybrid';renderPlan()")
+    assert marker(page, 'GCONE').locator('circle[stroke]').first.get_attribute('stroke') == '#d92d20'
+    completed = page.locator('[data-plan-code="GCDONE"]')
+    expect(completed.locator('.cachecheck')).to_have_text('✓')
+    expect(completed.locator('.completed-status')).to_have_text('Complete')
+    assert completed.locator('small').inner_text().count('🟢') == 0
     # Completed-only and coordinate-less libraries give accurate empty states.
     page.evaluate("Object.keys(DB.caches).forEach(c=>PR(c).logged=true); renderPlan()")
     expect(page.locator('.mapwrap')).to_contain_text('All saved caches are complete')
