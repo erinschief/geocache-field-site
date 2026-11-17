@@ -34,7 +34,7 @@ h1{font-size:18px;margin:4px 0 8px}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
 svg#map{width:100%;height:auto;aspect-ratio:1;display:block;border-radius:10px;background:var(--bg);border:1px solid var(--line);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
 svg#map.panning{cursor:grabbing}
-.mapwrap{position:relative;overflow:hidden;border-radius:10px}.mapfit{position:absolute;right:10px;bottom:10px;display:grid;place-items:center;width:44px;height:44px;padding:10px;border:0;background:transparent;color:var(--muted);filter:drop-shadow(0 1px 1px var(--card));cursor:pointer}
+.mapwrap{position:relative;overflow:hidden;border-radius:10px}.mapfit{position:absolute;right:0;bottom:0;display:grid;place-items:center;width:36px;height:36px;padding:8px;border:0;background:transparent;color:var(--muted);filter:drop-shadow(0 1px 1px var(--card));cursor:pointer}
 #map [role="button"]:focus-visible{outline:none;filter:drop-shadow(0 0 3px var(--accent))}
 .mapselection{display:grid;gap:8px;padding:10px 0 4px}.mapselection .cachetitle{color:var(--text);overflow-wrap:anywhere}.mapselection .btns>*{flex:1 1 140px;text-align:center}.mapselection .viewcache{width:100%;text-align:center}
 .maplistpicker{width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);font:inherit}.maplistpicker[hidden]{display:none}
@@ -1780,7 +1780,7 @@ function mapSVG() {
     if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 64)
       for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++)
         s += `<image href="${prov.url(((tx % 2 ** z) + 2 ** z) % 2 ** z, ty, z)}" x="${tx * 256}" y="${ty * 256}" width="256" height="256" preserveAspectRatio="none" onerror="this.remove()"/>`;
-    s += `<text x="${x0 + vbw - 4 * k}" y="${y0 + vbh - 5 * k}" text-anchor="end" font-size="${9 * k}" fill="var(--muted)" opacity=".85" stroke="var(--bg)" stroke-width="${2.2 * k}" paint-order="stroke">${esc(prov.attr)}</text>`;
+    s += `<text data-map-credits="true" x="${x0 + 4 * k}" y="${y0 + vbh - 4 * k}" text-anchor="start" font-size="${7 * k}" fill="var(--muted)" opacity=".85" stroke="var(--bg)" stroke-width="${2.2 * k}" paint-order="stroke">${esc(prov.attr)}</text>`;
   }
   const route = order.map(cachePosition).filter(c => c && c.lat != null);
   if (route.length > 1) s += `<polyline points="${route.map(c => X(c.lon).toFixed(1) + ',' + Y(c.lat).toFixed(1)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="${2.4 * k}" stroke-dasharray="${6 * k} ${5 * k}"/>`;
@@ -1792,7 +1792,7 @@ function mapSVG() {
       : c.type === 'Multi'
       ? `<path d="M${x} ${y-r*1.2} L${x+r*1.2} ${y} L${x} ${y+r*1.2} L${x-r*1.2} ${y} Z" fill="${fill}" stroke="${col}" stroke-width="${2.4*k}" stroke-linejoin="round"/>`
       : `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${col}" stroke-width="${2.4*k}"/>`;
-    const label = `${c.name} · ${c.code}${inProgress ? ' · In progress' : ''}${memberships.length ? ' · '+memberships.map(listTitle).join(', ') : ''}`;
+    const label = `${c.name} · ${c.code}${prog(c.code).logged ? ' · Complete' : inProgress ? ' · In progress' : ''}${memberships.length ? ' · '+memberships.map(listTitle).join(', ') : ''}`;
     s += `<g data-act="mapmark" data-code="${c.code}" data-x="${x}" data-y="${y}" role="button" tabindex="0" aria-label="${esc(label)}" aria-pressed="${PLANFOCUS === c.code}" style="cursor:pointer"><title>${esc(label)}</title><circle cx="${x}" cy="${y}" r="${17*k}" fill="transparent"/>`;
     s += shape(t || prog(c.code).logged ? col : 'var(--card)');
     if (!t && inProgress) {
@@ -1802,6 +1802,7 @@ function mapSVG() {
     if (t) s += `<text x="${x}" y="${y+3.6*k}" text-anchor="middle" font-size="${10.5*k}" font-weight="700" fill="#fff">${idx+1}</text>`;
     else if (memberships.length) s += `<text data-list-icon="${esc(memberships[0].id)}" x="${x}" y="${y+3*k}" text-anchor="middle" font-size="${9*k}" aria-hidden="true">${esc(memberships[0].emoji || '🗺️')}</text>`;
     if (PLANFOCUS === c.code) s += `<circle cx="${x}" cy="${y}" r="${14*k}" fill="none" stroke="var(--accent)" stroke-width="${2.6*k}"/>`;
+    if (prog(c.code).logged) s += `<g data-map-complete="true" aria-hidden="true"><circle cx="${x+7*k}" cy="${y+7*k}" r="${5.5*k}" fill="var(--ok)"/><path d="M${x+4.5*k} ${y+7*k} l${1.7*k} ${1.8*k} l${3.4*k} ${-3.8*k}" fill="none" stroke="#fff" stroke-width="${1.5*k}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
     s += `</g>`;
   });
   return s + '</svg>';
@@ -1876,10 +1877,10 @@ let TOP_CONFIRM=null;
 function putCacheFirst(code,button){
  const target=planTrip();if(!target||!target.codes.includes(code))return;const key=code+'|'+target.id;
  if(!TOP_CONFIRM||TOP_CONFIRM.key!==key||performance.now()>TOP_CONFIRM.until||(button&&button.dataset.confirm!=='1')){
-  TOP_CONFIRM={key,until:performance.now()+5000};PLANFOCUS=code;if(!button){renderPlan();button=document.querySelector(`[data-act="mapfirst"][data-code="${code}"]`);}
-  if(button){const original=button.textContent;button.textContent='Click again to move to top';button.dataset.confirm='1';setTimeout(()=>{if(button.isConnected){button.textContent=original;delete button.dataset.confirm;}if(TOP_CONFIRM?.key===key)TOP_CONFIRM=null;},5000);}return;
+  dismissButtonConfirmation();TOP_CONFIRM={key,until:performance.now()+5000};PLANFOCUS=code;if(!button){renderPlan();button=document.querySelector(`[data-act="mapfirst"][data-code="${code}"]`);}
+  if(button){const original=button.textContent;showButtonConfirmation(button,()=>{button.textContent='Click again to move to top';button.dataset.confirm='1';},()=>{button.textContent=original;delete button.dataset.confirm;if(TOP_CONFIRM?.key===key)TOP_CONFIRM=null;},5000);}return;
  }
- TOP_CONFIRM=null;const t=target,before=[...t.codes];t.codes=t.codes.filter(v=>v!==code);t.codes.unshift(code);UI.scope={k:'trip',id:t.id};PLANFOCUS=code;save();render();tripUndo(t,before,'Moved “'+C(code).name+'” to the top of '+t.name);
+ dismissButtonConfirmation();TOP_CONFIRM=null;const t=target,before=[...t.codes];t.codes=t.codes.filter(v=>v!==code);t.codes.unshift(code);UI.scope={k:'trip',id:t.id};PLANFOCUS=code;save();render();tripUndo(t,before,'Moved “'+C(code).name+'” to the top of '+t.name);
 }
 function deleteSavedCache(code) {
   const c = C(code); if (!c) return;
@@ -1919,7 +1920,7 @@ function renderPlan() {
         <option value="unstarted" ${mode.coll === 'unstarted' ? 'selected' : ''}>Not started (${scopeList({k:'unstarted'}).length})</option>
         ${DB.trips.length ? `<optgroup label="Lists">${DB.trips.map(x => `<option value="trip:${x.id}" ${t?.id === x.id ? 'selected' : ''}>${esc(listTitle(x))} (${x.codes.length})</option>`).join('')}</optgroup>` : ''}</select>
       </div>
-    <div class="mapwrap">${map}${map.startsWith('<svg') ? `<button class="mapfit" data-act="autozoom" aria-label="Fit all caches" title="Fit all caches"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/></svg></button>` : ''}</div>
+    <div class="mapwrap">${map}${map.startsWith('<svg') ? `<button class="mapfit" data-act="autozoom" aria-label="Fit all caches" title="Fit all caches"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/></svg></button>` : ''}</div>
     <div id="cap" aria-live="polite">${f ? `<div class="mapselection"><div class="cachetitle">${emo(f.type)} <b>${esc(f.name)}</b> · ${esc(f.code)}</div>
       <button class="btn viewcache" data-act="view-cache" data-code="${f.code}">View cache details</button>
       <div class="btns">${t ? `<button class="btn sm" data-act="mapfirst" data-code="${f.code}">Move to top of list</button>` : `<select id="map-list-picker" class="maplistpicker" aria-label="Add to list" data-map-add="${f.code}" ${!DB.trips.length ? 'disabled' : ''}><option value="">Add to list${!DB.trips.length ? ' — create a list first' : ''}</option>${DB.trips.map(x => `<option value="${esc(x.id)}" ${x.codes.includes(f.code) ? 'disabled' : ''}>${esc(listTitle(x))}${x.codes.includes(f.code) ? ' (already added)' : ''}</option>`).join('')}</select>`}<button class="btn sm danger" data-act="remove-plan-cache" data-code="${f.code}">Remove saved cache</button></div>
@@ -2432,6 +2433,20 @@ function render() {
 function restoreDB(snapText) {
   const o = JSON.parse(snapText), ui = UI; DB = Object.assign(freshDB(), o); Object.assign(ui, o.ui || {}); DB.ui = ui;
 }
+let BUTTON_CONFIRM = null;
+function dismissButtonConfirmation() {
+  const current=BUTTON_CONFIRM;BUTTON_CONFIRM=null;if(!current)return;
+  clearTimeout(current.timer);current.reset();
+}
+function showButtonConfirmation(button,show,reset,delay) {
+  dismissButtonConfirmation();show();
+  BUTTON_CONFIRM={button,reset,timer:setTimeout(dismissButtonConfirmation,delay)};
+}
+function dismissOutsideConfirmation(e) {
+  if(BUTTON_CONFIRM && !BUTTON_CONFIRM.button.contains(e.target))dismissButtonConfirmation();
+}
+document.addEventListener('pointerdown',dismissOutsideConfirmation,true);
+document.addEventListener('click',dismissOutsideConfirmation,true);
 let ARMED = '';
 function tripModal(id) {
   const t = id && DB.trips.find(x => x.id === id);
@@ -2513,8 +2528,8 @@ document.addEventListener('click', async e => {
     const trip = planTrip();
     if (trip?.codes.includes(code)) {
       const key = 'list-remove:' + trip.id + ':' + code;
-      if (ARMED !== key || el.dataset.confirm !== '1') { ARMED = key; el.dataset.confirm = '1'; el.classList.add('danger'); el.textContent = 'Remove from list?'; el.setAttribute('aria-label', 'Remove from list?'); setTimeout(() => { if (ARMED === key) ARMED = ''; if (el.isConnected) { delete el.dataset.confirm; el.classList.remove('danger'); el.textContent = '✕'; el.setAttribute('aria-label', 'Remove from this list'); } }, 4000); return; }
-      ARMED = '';
+      if (ARMED !== key || el.dataset.confirm !== '1') { showButtonConfirmation(el,()=>{ARMED = key; el.dataset.confirm = '1'; el.classList.add('danger'); el.textContent = 'Remove from list?'; el.setAttribute('aria-label', 'Remove from list?');},()=>{if (ARMED === key) ARMED = ''; delete el.dataset.confirm; el.classList.remove('danger'); el.textContent = '✕'; el.setAttribute('aria-label', 'Remove from this list');},4000); return; }
+      dismissButtonConfirmation();
     }
     togglePlanCode(code); return;
   }
@@ -2522,8 +2537,8 @@ document.addEventListener('click', async e => {
   if(act==='auto'){const t=planTrip();if(t){const before=[...t.codes];nearestOrder(t);save();render();tripUndo(t,before,'List reordered by distance');}return;}
   if(act==='clearplan'){const t=planTrip();if(t){const before=[...t.codes];t.codes=[];save();render();tripUndo(t,before,'List emptied');}return;}
   if (act === 'remove-plan-cache') {
-    if (ARMED !== 'planrm:' + code) { ARMED = 'planrm:' + code; el.textContent = 'Remove saved cache?'; setTimeout(() => { if (ARMED === 'planrm:' + code) ARMED = ''; if (el.isConnected) el.textContent = 'Remove saved cache'; }, 4000); return; }
-    ARMED = ''; deleteSavedCache(code); return;
+    if (ARMED !== 'planrm:' + code) { showButtonConfirmation(el,()=>{ARMED = 'planrm:' + code; el.textContent = 'Remove saved cache?';},()=>{if (ARMED === 'planrm:' + code) ARMED = '';el.textContent = 'Remove saved cache';},4000); return; }
+    dismissButtonConfirmation(); deleteSavedCache(code); return;
   }
   if (act === 'copy') { await copyText(buildMsg(code)); return; }
   if (act === 'stage-checker') {

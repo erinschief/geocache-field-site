@@ -77,6 +77,8 @@ def run_flow(browser, origin, touch):
     assert page.locator('#map polyline').count() == 0
     assert page.locator('#map text:not([data-list-icon])').count() == 0
     expect(marker(page, 'GCTWO').locator('[data-progress="half"]')).to_have_count(1)
+    expect(marker(page, 'GCDONE').locator('[data-map-complete]')).to_have_count(1)
+    expect(marker(page, 'GCONE').locator('[data-map-complete]')).to_have_count(0)
     expect(marker(page, 'GCOTHER').locator('[data-list-icon]')).to_have_text('🌳')
     expect(marker(page, 'GCTWO').locator('[data-list-icon]')).to_have_text('🥾')
     expect(marker(page, 'GCONE').locator('[data-progress]')).to_have_count(0)
@@ -84,6 +86,7 @@ def run_flow(browser, origin, touch):
     expect(page.locator('.mapgesture')).to_have_count(0)
     fit = page.get_by_role('button', name='Fit all caches', exact=True)
     assert fit.inner_text() == ''
+    expect(fit.locator('svg')).to_have_attribute('width','20')
     fit_box, map_box = fit.bounding_box(), page.locator('#map').bounding_box()
     assert fit_box['x'] > map_box['x'] + map_box['width'] / 2
     assert fit_box['y'] > map_box['y'] + map_box['height'] / 2
@@ -177,6 +180,12 @@ def run_flow(browser, origin, touch):
     assert 'GCONE' in state(page)['trips'][0]['codes']
     expect(remove).to_have_text('Remove from list?')
     expect(remove).to_have_class(re.compile('danger'))
+    page.locator('[data-plan-kind="in"][data-plan-code="GCONE"] .rt small').first.click()
+    expect(remove).to_have_text('✕')
+    expect(remove).not_to_have_class(re.compile('danger'))
+    remove.click()
+    assert 'GCONE' in state(page)['trips'][0]['codes']
+    expect(remove).to_have_text('Remove from list?')
     remove.click()
     assert 'GCONE' not in state(page)['trips'][0]['codes']
     assert 'GCONE' in state(page)['caches']
@@ -285,6 +294,7 @@ def run_edges(browser, origin):
     context = browser.new_context(reduced_motion='reduce')
     page = context.new_page()
     page.goto(origin)
+    context.route('https://**/*',lambda route:route.abort())
     data = fixture()
     data['trips'] = []
     page.evaluate('(data)=>localStorage.setItem("gfs2",JSON.stringify(data))', data)
@@ -337,6 +347,11 @@ def run_edges(browser, origin):
         page.get_by_role('button', name='Fit all caches', exact=True).click()
         assert abs(page.locator('#map').bounding_box()['height']-box['height']) < 1
     page.evaluate("UI.planScope={k:'all'};renderPlan()")
+    page.evaluate("UI.mapProvider='simple';renderPlan()")
+    credits=page.locator('[data-map-credits]')
+    expect(credits).to_have_attribute('text-anchor','start')
+    assert credits.evaluate("el=>{const svg=el.ownerSVGElement,v=svg.viewBox.baseVal;return +el.getAttribute('x')<v.x+v.width*.1 && +el.getAttribute('y')>v.y+v.height*.9}")
+    page.evaluate("UI.mapProvider='off';renderPlan()")
     # Completed-only and coordinate-less libraries give accurate empty states.
     page.evaluate("Object.keys(DB.caches).forEach(c=>PR(c).logged=true); renderPlan()")
     assert map_codes(page) == {'GCONE', 'GCTWO', 'GCLOOSE', 'GCOTHER', 'GCDONE'}
