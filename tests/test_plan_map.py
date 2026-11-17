@@ -196,6 +196,7 @@ def run_flow(browser, origin, touch):
     page.mouse.move(target['x']+20, target['y']+5, steps=8)
     page.mouse.up()
     assert state(page)['trips'][0]['codes'][0] == 'GCONE'
+    expect(page.locator('[data-plan-kind="in"][data-plan-code="GCONE"] .idx')).to_have_text('🌐')
     # Expired removal confirmation needs a fresh pair of taps.
     remove = page.locator('[data-plan-kind="in"][data-plan-code="GCONE"] [data-act="toggleSel"]')
     remove.click()
