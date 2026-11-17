@@ -88,6 +88,9 @@ def run_flow(browser, origin, touch):
     assert fit_box['x'] > map_box['x'] + map_box['width'] / 2
     assert fit_box['y'] > map_box['y'] + map_box['height'] / 2
     assert page.locator('body').evaluate('(el)=>el.scrollWidth<=innerWidth')
+    # Listed markers use the same radius as the public marker size.
+    assert page.evaluate("Math.abs(+document.querySelector('#map [data-code=GCONE] circle[stroke]').getAttribute('r') - 8 * +document.querySelector('#map').dataset.vbw/380)<1e-8")
+    assert fit.evaluate("el=>getComputedStyle(el).color === getComputedStyle(document.querySelector('.nearbyrefresh')).color")
     click_marker(page, 'GCLOOSE', touch)
     if touch:
         page.evaluate("document.documentElement.dataset.theme='dark'")
@@ -105,14 +108,13 @@ def run_flow(browser, origin, touch):
     # Existing memberships have a manage button, stacked list names and clickable title.
     row = page.locator('[data-plan-code="GCOTHER"]')
     expect(row.locator('.membership')).to_have_text('🌳 Other trip')
-    row.get_by_role('button', name='Manage lists for Another list', exact=True).click()
-    page.locator('[data-membership="walk"]').check()
-    page.get_by_role('button', name='Save lists', exact=True).click()
+    row.get_by_role('combobox', name='Manage lists for Another list', exact=True).select_option('walk')
+    expect(page.locator('#modal')).to_be_hidden()
     assert 'GCOTHER' in state(page)['trips'][0]['codes']
     expect(row.locator('.membership span')).to_have_count(2)
-    row.get_by_role('button', name='Manage lists for Another list', exact=True).click()
-    page.locator('[data-membership="walk"]').uncheck()
-    page.get_by_role('button', name='Save lists', exact=True).click()
+    row.get_by_role('combobox', name='Manage lists for Another list', exact=True).select_option('walk')
+    assert 'GCOTHER' not in state(page)['trips'][0]['codes']
+    expect(row.locator('.rowcode')).to_have_text('· GCOTHER')
     row.locator('.cachelink').click()
     expect(page.locator('#card-GCOTHER')).to_be_visible()
     expect(page.locator('#chips')).to_have_text('Single cache view')
@@ -273,6 +275,7 @@ def run_edges(browser, origin):
         assert progress['y'] >= details['y'] + details['height']
     refresh = page.get_by_role('button', name='Refresh nearby caches')
     assert refresh.inner_text() == ''
+    assert refresh.locator('svg').evaluate('(el)=>{const b=el.getBBox(),v=el.viewBox.baseVal;return b.x>=v.x && b.y>=v.y && b.x+b.width<=v.width && b.y+b.height<=v.height}')
     assert refresh.bounding_box()['x'] > page.locator('.nearbybar').bounding_box()['x']
     # Automatic Plan filters use the same unlisted collections as the sidebar and Field.
     page.evaluate("PR('GCLOOSE').notes='Started';save()")

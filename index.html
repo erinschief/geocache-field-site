@@ -35,12 +35,12 @@ h1{font-size:18px;margin:4px 0 8px}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
 svg#map{width:100%;height:auto;display:block;border-radius:10px;background:var(--bg);border:1px solid var(--line);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
 svg#map.panning{cursor:grabbing}
-.mapwrap{position:relative}.mapfit{position:absolute;right:10px;bottom:10px;display:grid;place-items:center;width:44px;height:44px;padding:10px;border:0;background:transparent;color:var(--text);cursor:pointer}
+.mapwrap{position:relative}.mapfit{position:absolute;right:10px;bottom:10px;display:grid;place-items:center;width:44px;height:44px;padding:10px;border:0;background:transparent;color:var(--muted);filter:drop-shadow(0 1px 1px var(--card));cursor:pointer}
 #map [role="button"]:focus-visible{outline:none;filter:drop-shadow(0 0 3px var(--accent))}
 .mapselection{display:grid;gap:8px;padding:10px 0 4px}.mapselection .cachetitle{color:var(--text);overflow-wrap:anywhere}.mapselection .btns>*{flex:1 1 140px;text-align:center}.mapselection .viewcache{width:100%;text-align:center}
 .maplistpicker{width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);font:inherit}.maplistpicker[hidden]{display:none}
-.rowprogress{display:block;margin-top:3px}.nearbybar{position:relative;padding-right:36px;margin:0;color:var(--muted);font-size:12px}.nearbybar+h3{margin-top:4px}.nearbyrefresh{position:absolute;right:0;top:0;border:0;background:none;color:var(--muted);padding:3px;cursor:pointer;line-height:0}
-.cachelink{border:0;background:none;color:inherit;font:inherit;font-weight:700;text-align:left;padding:0;cursor:pointer}.row .idx{position:relative;font-size:24px;flex-basis:32px}.row[data-plan-kind="in"] .idx{font-size:16px}.cachecheck{position:absolute;right:-3px;bottom:-3px;border-radius:50%;background:var(--ok);color:#fff;font-size:12px;line-height:17px;width:17px}.completed-status{color:var(--ok);font-weight:700}.membership{display:flex;flex-direction:column;align-items:flex-end;gap:5px;font-size:12px}.membership span{overflow-wrap:anywhere}.rowtools{max-width:38%;display:flex;flex-direction:column;align-items:flex-end;gap:7px}.managecheck{display:flex;gap:8px;padding:9px 0;align-items:center}
+.rowprogress{display:block;margin-top:3px}.nearbybar{position:relative;min-height:30px;padding-right:36px;margin:0;color:var(--muted);font-size:12px}.nearbybar+h3{margin-top:4px}.nearbyrefresh{position:absolute;right:0;top:0;border:0;background:none;color:var(--muted);width:30px;height:30px;display:grid;place-items:center;padding:4px;cursor:pointer;line-height:1}.nearbyrefresh svg{display:block;overflow:visible}
+.cachelink{border:0;background:none;color:inherit;font:inherit;font-weight:700;text-align:left;padding:0;cursor:pointer}.row .idx{position:relative;font-size:24px;flex-basis:32px}.row[data-plan-kind="in"] .idx{font-size:16px}.cachecheck{position:absolute;right:-3px;bottom:-3px;border-radius:50%;background:var(--ok);color:#fff;font-size:12px;line-height:17px;width:17px}.completed-status{color:var(--ok);font-weight:700}.membership{display:flex;flex-direction:column;align-items:flex-end;gap:5px;font-size:12px}.membership span{overflow-wrap:anywhere}.rowtools{max-width:38%;display:flex;flex-direction:column;align-items:flex-end;gap:7px}.rowcode{color:var(--muted);font-size:13px;font-weight:400}.managepicker{position:relative;display:grid;place-items:center}.managepicker select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.managepicker:focus-within{outline:2px solid var(--accent);outline-offset:2px}
 #cap{font-size:13px;color:var(--muted);min-height:20px;margin:6px 0}
 .lbl{fill:var(--muted);font-size:9px}
 .row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);position:relative}
@@ -876,13 +876,13 @@ function distanceText(code) {
 }
 function nearbyHTML() {
   if(UI.tab==='plan' ? planTrip() : UI.scope.k==='trip' || UI.fieldCache) return '';
-  return `<div class="nearbybar"><span data-nearby-status>${nearbyStatus()}</span><button class="nearbyrefresh" data-act="nearby-refresh" aria-label="Refresh nearby caches" title="Enable location / refresh"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-3l2 3M4 16l2 3a8 8 0 0 0 13-3"/></svg></button></div>`;
+  return `<div class="nearbybar"><span data-nearby-status>${nearbyStatus()}</span><button class="nearbyrefresh" data-act="nearby-refresh" aria-label="Refresh nearby caches" title="Enable location / refresh"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8M3 3v5h5"/></svg></button></div>`;
 }
 function nearbyStatus() {
   return NEARBY.error ? esc(NEARBY.error) : NEARBY.pos ? 'Nearby caches, not a route. Straight-line distances update as you move; refresh to reorder.' : esc(NEARBY.error || 'Finding your location… Use the refresh icon to enable location.');
 }
 function refreshNearbyLabels() {
-  document.querySelectorAll('[data-distance]').forEach(el=>{el.textContent=distanceText(el.dataset.distance);});
+  document.querySelectorAll('[data-distance]').forEach(el=>{const text=distanceText(el.dataset.distance);el.textContent=text?(el.dataset.distancePrefix||'')+text:'';});
   document.querySelectorAll('[data-nearby-status]').forEach(el=>{el.innerHTML=nearbyStatus();});
 }
 function requestNearbyLocation(high=false) {
@@ -1782,7 +1782,7 @@ function mapSVG() {
   if (route.length > 1) s += `<polyline points="${route.map(c => X(c.lon).toFixed(1) + ',' + Y(c.lat).toFixed(1)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="${2.4 * k}" stroke-dasharray="${6 * k} ${5 * k}"/>`;
   pts.forEach((c, markerIndex) => {
     const x = X(c.lon), y = Y(c.lat), idx = order.indexOf(c.code), col = typeColor(c.type);
-    const inProgress = started(c.code) && !prog(c.code).logged, memberships = tripsOf(c.code), r = (!t && memberships.length ? 12 : 8) * k;
+    const inProgress = started(c.code) && !prog(c.code).logged, memberships = tripsOf(c.code), r = 8 * k;
     const shape = fill => c.type === 'EarthCache'
       ? `<rect x="${x-r*.9}" y="${y-r*.9}" width="${r*1.8}" height="${r*1.8}" rx="${3*k}" fill="${fill}" stroke="${col}" stroke-width="${2.4*k}"/>`
       : c.type === 'Multi'
@@ -1796,7 +1796,7 @@ function mapSVG() {
       s += `<defs><clipPath id="${clip}"><rect x="${x-r*1.5}" y="${y-r*1.5}" width="${r*1.5}" height="${r*3}"/></clipPath></defs><g data-progress="half" clip-path="url(#${clip})">${shape(col)}</g>`;
     }
     if (t) s += `<text x="${x}" y="${y+3.6*k}" text-anchor="middle" font-size="${10.5*k}" font-weight="700" fill="#fff">${idx+1}</text>`;
-    else if (memberships.length) s += `<text data-list-icon="${esc(memberships[0].id)}" x="${x}" y="${y+3.5*k}" text-anchor="middle" font-size="${11*k}" aria-hidden="true">${esc(memberships[0].emoji || '🗺️')}</text>`;
+    else if (memberships.length) s += `<text data-list-icon="${esc(memberships[0].id)}" x="${x}" y="${y+3*k}" text-anchor="middle" font-size="${9*k}" aria-hidden="true">${esc(memberships[0].emoji || '🗺️')}</text>`;
     if (PLANFOCUS === c.code) s += `<circle cx="${x}" cy="${y}" r="${14*k}" fill="none" stroke="var(--accent)" stroke-width="${2.6*k}"/>`;
     s += `</g>`;
   });
@@ -1882,18 +1882,15 @@ function deleteSavedCache(code) {
   if (PLANFOCUS === code) PLANFOCUS = null; if (UI.fieldCache === code) UI.fieldCache = null; save(); render(); toast('Removed saved cache');
 }
 const manageListIcon = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h10M3 11h7M3 17h7M14 21l-3 1 1-3L20 11l2 2zM18 13l2 2"/></svg>';
-function manageCacheLists(code) {
-  openModal(`<h2>Manage lists</h2><p>${esc(C(code).name)}</p>${DB.trips.map(t => `<label class="managecheck"><input type="checkbox" data-membership="${esc(t.id)}" ${t.codes.includes(code) ? 'checked' : ''}>${esc(listTitle(t))}</label>`).join('')}<div class="btns"><button class="btn pri" data-act="save-memberships" data-code="${code}">Save lists</button><button class="btn" data-act="closemodal">Cancel</button></div>`);
-}
 function planRow(code, i, kind) {
   const c = C(code), lists = tripsOf(code), done = !!prog(code).logged;
   const noc = c.lat == null ? ' · <span class="warn" style="display:inline">no coordinates</span>' : '';
   const status = statusLine(code).replace(/(?: · )?logged$/, '');
   return `<div class="row ${PLANFOCUS === code ? 'focus' : ''}" data-plan-code="${code}" data-plan-kind="${kind}">${kind === 'in' ? `<button class="grab" data-drag="${code}" aria-label="Drag ${esc(c.name)} to reorder" title="Drag to reorder">⠿</button>` : ''}<span class="idx">${kind === 'in' ? i + 1 : emo(c.type)}${done ? '<span class="cachecheck" aria-label="Complete">✓</span>' : ''}</span>
-    <div class="rt"><b><button class="cachelink" data-act="view-cache" data-code="${code}">${esc(c.name)}</button></b><small>${esc(c.type)} · ${esc(c.code)} <span data-distance="${code}">${esc(distanceText(code))}</span>${noc}</small>${status || done ? `<small class="rowprogress">${esc(status)}${done ? `${status ? ' · ' : ''}<span class="completed-status">Complete</span>` : ''}</small>` : ''}</div>
+    <div class="rt"><b><button class="cachelink" data-act="view-cache" data-code="${code}">${esc(c.name)}</button><span class="rowcode"> · ${esc(c.code)}</span></b><small>${esc(c.type)}<span data-distance="${code}" data-distance-prefix=" · ">${distanceText(code) ? ' · ' + esc(distanceText(code)) : ''}</span>${noc}</small>${status || done ? `<small class="rowprogress">${esc(status)}${done ? `${status ? ' · ' : ''}<span class="completed-status">Complete</span>` : ''}</small>` : ''}</div>
     ${kind === 'in' ? `<button class="btn sm" data-act="toggleSel" data-code="${code}" aria-label="Remove from this list" title="Tap twice to remove from this list">✕</button>`
       : kind === 'out' ? `<button class="btn sm" data-act="toggleSel" data-code="${code}">+</button>`
-      : lists.length ? `<div class="rowtools"><div class="membership">${lists.map(t=>`<span>${esc(listTitle(t))}</span>`).join('')}</div><button class="btn sm" data-act="manage-lists" data-code="${code}" aria-label="Manage lists for ${esc(c.name)}" title="Manage lists">${manageListIcon}</button></div>`
+      : lists.length ? `<div class="rowtools"><div class="membership">${lists.map(t=>`<span>${esc(listTitle(t))}</span>`).join('')}</div><label class="btn sm managepicker" title="Manage lists">${manageListIcon}<select aria-label="Manage lists for ${esc(c.name)}" data-list-toggle="${code}"><option value="">Manage lists…</option>${DB.trips.map(t=>`<option value="${esc(t.id)}">${t.codes.includes(code) ? 'Remove from' : 'Add to'} ${esc(listTitle(t))}</option>`).join('')}</select></label></div>`
       : `<button class="btn sm" data-act="addtolist" data-code="${code}">→ list</button>`}</div>`;
 }
 function renderPlan() {
@@ -2481,13 +2478,6 @@ document.addEventListener('click', async e => {
   if (act === 'zoomin') { PLANZOOM = Math.min(4, PLANZOOM + 1); renderPlan(); return; }
   if (act === 'zoomout') { PLANZOOM = Math.max(-2, PLANZOOM - 1); renderPlan(); return; }
   if (act === 'autozoom') { PLANZOOM = 0; PLANPAN = {x:0,y:0}; renderPlan(); return; }
-  if (act === 'manage-lists') { manageCacheLists(code); return; }
-  if (act === 'save-memberships') {
-    const selected = new Set([...document.querySelectorAll('[data-membership]:checked')].map(x=>x.dataset.membership));
-    const before = DB.trips.map(t=>({id:t.id,codes:[...t.codes]}));
-    DB.trips.forEach(t=>{if(selected.has(t.id)){if(!t.codes.includes(code))t.codes.push(code);}else t.codes=t.codes.filter(c=>c!==code);});
-    closeModal();save();render();toast('Lists updated',()=>{before.forEach(old=>{const t=DB.trips.find(x=>x.id===old.id);if(t)t.codes=old.codes.filter(c=>C(c));});save();render();});return;
-  }
   if (act === 'mapmark') { if (MAPMOVED) return; PLANFOCUS = code; renderPlan(); return; }
   if (act === 'view-cache') { openPlanCache(code); return; }
 
@@ -2699,6 +2689,12 @@ document.addEventListener('change', async e => {
       setTimeout(() => { if(t.isConnected && t.checked){rerenderCard(c); renderDrawer();} }, Math.max(560,celebration||0));
     } else { rerenderCard(c); renderDrawer(); }
     return;
+  }
+  if (d.listToggle) {
+    const trip = DB.trips.find(x=>x.id===t.value), code=d.listToggle; if(!trip || !C(code))return;
+    const before=[...trip.codes], included=trip.codes.includes(code);
+    if(included)trip.codes=trip.codes.filter(c=>c!==code);else trip.codes.push(code);
+    save();render();tripUndo(trip,before,(included?'Removed from ':'Added to ')+trip.name);return;
   }
   if (d.mapAdd) {
     const trip = DB.trips.find(x => x.id === t.value); if (!trip || !C(d.mapAdd)) return;
