@@ -34,7 +34,11 @@ h1{font-size:18px;margin:4px 0 8px}
 .btn.sm{padding:5px 9px;font-size:13px}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
 svg#map{width:100%;height:auto;display:block;border-radius:10px;background:var(--bg);border:1px solid var(--line);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
-svg#map.panning{cursor:grabbing}.mapgesture{font-size:12px;color:var(--muted);margin:7px 0 3px}
+svg#map.panning{cursor:grabbing}
+.mapwrap{position:relative}.mapfit{position:absolute;right:10px;bottom:10px;display:grid;place-items:center;width:44px;height:44px;padding:10px!important;box-shadow:0 2px 8px #0004}
+#map [role="button"]:focus-visible{outline:none;filter:drop-shadow(0 0 3px var(--accent))}
+.mapselection{display:grid;gap:8px;padding:10px 0 4px}.mapselection .cachetitle{color:var(--text);overflow-wrap:anywhere}.mapselection .btns>*{flex:1 1 140px;text-align:center}.mapselection .viewcache{width:100%;text-align:center}
+.maplistpicker{width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);font:inherit}.maplistpicker[hidden]{display:none}
 #cap{font-size:13px;color:var(--muted);min-height:20px;margin:6px 0}
 .lbl{fill:var(--muted);font-size:9px}
 .row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);position:relative}
@@ -410,7 +414,7 @@ const hash = s => { let h = 5381; for (const ch of String(s)) h = ((h << 5) + h 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 
 /* ---------- storage ---------- */
-const freshDB = () => ({v: 2, caches: {}, trips: [], prog: {}, ui: {tab: 'field', scope: {k: 'unstarted'}, planTrip: null, importDest: 'file', importMode: 'merge', lastExport: 0, decl: -10.1, north: 'true', mapProvider: 'simple', cartoKey: ''}});
+const freshDB = () => ({v: 2, caches: {}, trips: [], prog: {}, ui: {tab: 'field', scope: {k: 'unstarted'}, planScope: {k: 'all'}, fieldCache: null, planTrip: null, importDest: 'file', importMode: 'merge', lastExport: 0, decl: -10.1, north: 'true', mapProvider: 'simple', cartoKey: ''}});
 let DB = (() => {
   try { const r = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (r && r.v === 2) { const f = freshDB(); return Object.assign(f, r, {ui: Object.assign(f.ui, r.ui || {})}); } } catch (e) {}
@@ -428,6 +432,8 @@ const save = () => { clearTimeout(saveTimer); saveTimer = null; try { localStora
   let n = document.getElementById('storage-warning'); if (!n) { n = document.createElement('div'); n.id = 'storage-warning'; n.className = 'warnbox'; n.setAttribute('role', 'alert'); document.body.prepend(n); } n.textContent = STORAGE_ERROR; return false;
 } };
 const UI = DB.ui;
+// Plan browsing is independent of the active Field list; existing saves start with all incomplete caches.
+if (!UI.planScope) UI.planScope = {k: 'all'};
 if (!['trip', 'inprog', 'unstarted', 'logged'].includes((UI.scope || {}).k)) UI.scope = {k: 'unstarted'};
 if (!UI.mapProvider) UI.mapProvider = UI.mapBg === false ? 'off' : 'simple';   // old 'solo' / 'all' / 'parked' scopes
 if (UI.mapProvider === 'usgs') UI.mapProvider = 'simple';                     // migrate the old busy default
@@ -771,6 +777,7 @@ async function importSave(text, o) {
     if (d && d.prog && typeof d.prog === 'object') Object.entries(d.prog).forEach(([c, p]) => { if (DB.caches[c]) { if (o.mode === 'replace' || !existingCodes.has(c)) DB.prog[c] = structuredClone(p); else mergeProg(c, p); } });
     touched.forEach(recognizeFinal);
   } catch (e) { restoreDB(snap); IMG_SINK = []; return {ok: false, msg: 'Import failed, nothing changed — ' + e.message}; }
+  if (landing || touched.length) UI.fieldCache = null;
   if (landing) { UI.scope = {k: 'trip', id: landing.id}; UI.planTrip = landing.id; }
   else if (touched.length) UI.scope = {k: touched.some(c => started(c) && !prog(c).logged) ? 'inprog' : 'unstarted'};
   save();
@@ -866,7 +873,7 @@ function distanceText(code) {
   const c=cachePosition(code); return NEARBY.pos && c?.lat!=null && c.lon!=null ? fmtDist(hav([NEARBY.pos.latitude,NEARBY.pos.longitude],[c.lat,c.lon]))+' away' : '';
 }
 function nearbyHTML() {
-  if(UI.scope.k==='trip') return '';
+  if(UI.tab==='plan' ? planTrip() : UI.scope.k==='trip' || UI.fieldCache) return '';
   return `<div class="note"><span data-nearby-status>${nearbyStatus()}</span> <button class="btn sm" data-act="nearby-refresh">Enable location / refresh</button></div>`;
 }
 function nearbyStatus() {
@@ -888,7 +895,7 @@ function requestNearbyLocation(high=false) {
     NAV.course=p.coords.heading!=null && (p.coords.speed||0)>0.7 ? p.coords.heading : null;
     schedPaint();
     const busy=document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') || document.querySelector('#map.panning') || !document.getElementById('modal').hidden;
-    if(first && !busy && UI.scope.k!=='trip' && ['field','plan'].includes(UI.tab))render(); else refreshNearbyLabels();
+    if(first && !busy && (UI.tab==='plan' ? !planTrip() : UI.scope.k!=='trip') && ['field','plan'].includes(UI.tab))render(); else refreshNearbyLabels();
   },e=>{
     NEARBY.error=e.code===1?'Location denied. Allow location in browser settings; caches are shown by name.':NEARBY.pos?'Location update unavailable; showing the last known distances.':'Location unavailable; caches are shown by name. Use Refresh nearby order to retry.';
     NAV.err=NEARBY.error;refreshNearbyLabels();schedPaint();
@@ -1719,40 +1726,43 @@ const MAPS = {
 };
 const mapProv = () => MAPS[UI.mapProvider] || MAPS.simple;
 function planMode() {
-  const s = UI.scope;
+  const s = UI.planScope || {k: 'all'};
   if (s.k === 'trip') { const t = DB.trips.find(x => x.id === s.id); if (t) return {list: t}; }
-  if (['inprog', 'unstarted', 'logged'].includes(s.k)) return {coll: s.k};
-  return DB.trips.length ? {list: DB.trips[0]} : {coll: 'unstarted'};
+  return {coll: 'all'};
 }
 const planTrip = () => planMode().list || null;
 function planCodes() {
-  const m = planMode();
-  if (m.coll) return scopeList();
-  return m.list.codes.filter(c => DB.caches[c]).concat(Object.keys(DB.caches).filter(c => unlisted(c)));
+  const t = planTrip();
+  return t ? t.codes.filter(c => C(c)) : nearbyOrder(Object.keys(DB.caches).filter(c => !prog(c).logged));
+}
+const fieldCodes = () => UI.fieldCache && C(UI.fieldCache) ? [UI.fieldCache] : scopeList();
+function openPlanCache(code) {
+  if (!C(code)) return;
+  const t = planTrip();
+  UI.fieldCache = t?.codes.includes(code) ? null : code;
+  if (!UI.fieldCache) UI.scope = {k: 'trip', id: t.id};
+  UI.tab = 'field'; save(); render();
+  document.getElementById('card-' + code)?.scrollIntoView({block: 'start'});
 }
 const WORLD = z => 256 * 2 ** z;
 const mercX = (lon, z) => (lon + 180) / 360 * WORLD(z);
 const mercY = (lat, z) => { const s = Math.sin(Math.max(-85, Math.min(85, lat)) * Math.PI / 180); return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * WORLD(z); };
-let PLANFOCUS = null, PLANHIDDEN = 0, PLANMISSING = 0, PLANZOOM = 0, PLANPAN = {x: 0, y: 0}, MAPMOVED = false;
+let PLANFOCUS = null, PLANMISSING = 0, PLANZOOM = 0, PLANPAN = {x: 0, y: 0}, MAPMOVED = false;
 function mapSVG() {
   const mode = planMode(), t = mode.list || null, prov = mapProv(), codes = planCodes();
   const order = t ? t.codes : [];                       // numbering on the map
   const allC = codes.map(cachePosition);
   PLANMISSING = allC.filter(c => c.lat == null).length;
   const all = allC.filter(c => c.lat != null);
+  if (!codes.length) return `<div class="empty">${t ? 'This list has no caches yet.' : 'All saved caches are complete.'}</div>`;
   if (!all.length) return '<div class="empty">None of these caches has coordinates yet.</div>';
-  // fit the map to the list; unlisted caches only count if they're within ~2.5 mi of it (so one far-off cache can't shrink the view)
-  const mine = t ? all.filter(c => t.codes.includes(c.code)) : all, loose = t ? all.filter(c => !t.codes.includes(c.code)) : [];
-  let pts = all; PLANHIDDEN = 0;
-  if (t && mine.length) {
-    const ctr = [mine.reduce((a, c) => a + c.lat, 0) / mine.length, mine.reduce((a, c) => a + c.lon, 0) / mine.length];
-    const near = loose.filter(c => hav(ctr, [c.lat, c.lon]) <= 2.5); PLANHIDDEN = loose.length - near.length; pts = mine.concat(near);
-  }
+  // A selected trip contains only its own caches; the overview contains every incomplete cache.
+  const pts = all;
   const lats = pts.map(c => c.lat), lons = pts.map(c => c.lon);
   const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
   let autoZ = Math.min(17, prov.max);
   for (; autoZ > 3; autoZ--) { if (Math.max(mercX(maxLon, autoZ) - mercX(minLon, autoZ), mercY(minLat, autoZ) - mercY(maxLat, autoZ)) <= 560) break; }
-  const zoom = Math.max(3, Math.min(22, autoZ + PLANZOOM)), z = Math.min(prov.max, Math.floor(zoom)), scale = 2 ** (zoom - z), pad = 70;
+  const zoom = Math.max(3, Math.min(22, autoZ + PLANZOOM)), z = Math.min(prov.max, Math.floor(zoom)), scale = 2 ** (zoom - z), pad = 170;
   const vbw = Math.max(mercX(maxLon, autoZ) - mercX(minLon, autoZ) + 2 * pad, 420) / scale, vbh = Math.max(mercY(minLat, autoZ) - mercY(maxLat, autoZ) + 2 * pad, 320) / scale;
   const cx = (mercX(minLon, z) + mercX(maxLon, z)) / 2 + PLANPAN.x * vbw, cy = (mercY(minLat, z) + mercY(maxLat, z)) / 2 + PLANPAN.y * vbh;
   const x0 = cx - vbw / 2, y0 = cy - vbh / 2, k = vbw / 380, X = lo => mercX(lo, z), Y = la => mercY(la, z);
@@ -1767,14 +1777,24 @@ function mapSVG() {
   }
   const route = order.map(cachePosition).filter(c => c && c.lat != null);
   if (route.length > 1) s += `<polyline points="${route.map(c => X(c.lon).toFixed(1) + ',' + Y(c.lat).toFixed(1)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="${2.4 * k}" stroke-dasharray="${6 * k} ${5 * k}"/>`;
-  pts.forEach(c => {
-    const x = X(c.lon), y = Y(c.lat), idx = order.indexOf(c.code), on = !t || idx >= 0, col = typeColor(c.type), fill = on ? col : '#fff', r = 8 * k;
-    s += `<g data-act="mapmark" data-code="${c.code}" data-x="${x}" data-y="${y}" style="cursor:pointer"><circle cx="${x}" cy="${y}" r="${17 * k}" fill="transparent"/>`;
-    s += c.type === 'EarthCache' ? `<rect x="${x - r * .9}" y="${y - r * .9}" width="${r * 1.8}" height="${r * 1.8}" rx="${3 * k}" fill="${fill}" stroke="${col}" stroke-width="${2.4 * k}"/>`
-      : c.type === 'Multi' ? `<rect x="${x - r * .85}" y="${y - r * .85}" width="${r * 1.7}" height="${r * 1.7}" rx="${2 * k}" transform="rotate(45 ${x} ${y})" fill="${fill}" stroke="${col}" stroke-width="${2.4 * k}"/>`
-      : `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${col}" stroke-width="${2.4 * k}"/>`;
-    if (t && on) s += `<text x="${x}" y="${y + 3.6 * k}" text-anchor="middle" font-size="${10.5 * k}" font-weight="700" fill="#fff">${idx + 1}</text>`;
-    if (PLANFOCUS === c.code) s += `<circle cx="${x}" cy="${y}" r="${14 * k}" fill="none" stroke="var(--accent)" stroke-width="${2.6 * k}"/>`;
+  pts.forEach((c, markerIndex) => {
+    const x = X(c.lon), y = Y(c.lat), idx = order.indexOf(c.code), col = typeColor(c.type), r = 8 * k;
+    const inProgress = started(c.code) && !prog(c.code).logged, memberships = tripsOf(c.code);
+    const shape = fill => c.type === 'EarthCache'
+      ? `<rect x="${x-r*.9}" y="${y-r*.9}" width="${r*1.8}" height="${r*1.8}" rx="${3*k}" fill="${fill}" stroke="${col}" stroke-width="${2.4*k}"/>`
+      : c.type === 'Multi'
+      ? `<path d="M${x} ${y-r*1.2} L${x+r*1.2} ${y} L${x} ${y+r*1.2} L${x-r*1.2} ${y} Z" fill="${fill}" stroke="${col}" stroke-width="${2.4*k}" stroke-linejoin="round"/>`
+      : `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${col}" stroke-width="${2.4*k}"/>`;
+    const label = `${c.name} · ${c.code}${inProgress ? ' · In progress' : ''}${memberships.length ? ' · '+memberships.map(listTitle).join(', ') : ''}`;
+    s += `<g data-act="mapmark" data-code="${c.code}" data-x="${x}" data-y="${y}" role="button" tabindex="0" aria-label="${esc(label)}" aria-pressed="${PLANFOCUS === c.code}" style="cursor:pointer"><title>${esc(label)}</title><circle cx="${x}" cy="${y}" r="${17*k}" fill="transparent"/>`;
+    s += shape(t ? col : 'var(--card)');
+    if (!t && inProgress) {
+      const clip = 'map-half-' + markerIndex;
+      s += `<defs><clipPath id="${clip}"><rect x="${x-r*1.5}" y="${y-r*1.5}" width="${r*1.5}" height="${r*3}"/></clipPath></defs><g data-progress="half" clip-path="url(#${clip})">${shape(col)}</g>`;
+    }
+    if (t) s += `<text x="${x}" y="${y+3.6*k}" text-anchor="middle" font-size="${10.5*k}" font-weight="700" fill="#fff">${idx+1}</text>`;
+    else if (memberships.length) s += `<text data-list-icon="${esc(memberships[0].id)}" x="${x+10*k}" y="${y-9*k}" text-anchor="middle" font-size="${13*k}" aria-hidden="true">${esc(memberships[0].emoji || '🗺️')}</text>`;
+    if (PLANFOCUS === c.code) s += `<circle cx="${x}" cy="${y}" r="${14*k}" fill="none" stroke="var(--accent)" stroke-width="${2.6*k}"/>`;
     s += `</g>`;
   });
   return s + '</svg>';
@@ -1844,58 +1864,58 @@ function togglePlanCode(code) {
  if(planMode().coll){PLANFOCUS=code;render();return;}let t=planTrip();if(!t)return;
  const before=[...t.codes],i=t.codes.indexOf(code);if(i>=0)t.codes.splice(i,1);else t.codes.push(code);PLANFOCUS=code;save();render();tripUndo(t,before,(i>=0?'Removed from ':'Added to ')+t.name);
 }
-function listForTop(){const cur=planTrip();if(cur)return cur;let t=DB.trips.find(x=>x.id===UI.planTrip)||DB.trips[0];if(!t){t={id:uid(),name:'List 1',emoji:'',codes:[]};DB.trips.push(t);}UI.planTrip=t.id;return t;}
 let TOP_CONFIRM=null;
 function putCacheFirst(code,button){
- const target=planTrip()||DB.trips.find(x=>x.id===UI.planTrip)||DB.trips[0],key=code+'|'+(target?.id||'new');
+ const target=planTrip();if(!target||!target.codes.includes(code))return;const key=code+'|'+target.id;
  if(!TOP_CONFIRM||TOP_CONFIRM.key!==key||performance.now()>TOP_CONFIRM.until||(button&&button.dataset.confirm!=='1')){
   TOP_CONFIRM={key,until:performance.now()+5000};PLANFOCUS=code;if(!button){renderPlan();button=document.querySelector(`[data-act="mapfirst"][data-code="${code}"]`);}
   if(button){const original=button.textContent;button.textContent='Click again to move to top';button.dataset.confirm='1';setTimeout(()=>{if(button.isConnected){button.textContent=original;delete button.dataset.confirm;}if(TOP_CONFIRM?.key===key)TOP_CONFIRM=null;},5000);}return;
  }
- TOP_CONFIRM=null;const t=listForTop(),before=[...t.codes];t.codes=t.codes.filter(v=>v!==code);t.codes.unshift(code);UI.scope={k:'trip',id:t.id};PLANFOCUS=code;save();render();tripUndo(t,before,'Moved “'+C(code).name+'” to the top of '+t.name);
+ TOP_CONFIRM=null;const t=target,before=[...t.codes];t.codes=t.codes.filter(v=>v!==code);t.codes.unshift(code);UI.scope={k:'trip',id:t.id};PLANFOCUS=code;save();render();tripUndo(t,before,'Moved “'+C(code).name+'” to the top of '+t.name);
 }
 function deleteSavedCache(code) {
   const c = C(code); if (!c) return;
   const images=c.images || []; delete DB.caches[code]; delete DB.prog[code]; images.forEach(im=>imgDel(im.id)); DB.trips.forEach(t => { t.codes = t.codes.filter(x => x !== code); });
-  if (PLANFOCUS === code) PLANFOCUS = null; save(); render(); toast('Removed saved cache');
+  if (PLANFOCUS === code) PLANFOCUS = null; if (UI.fieldCache === code) UI.fieldCache = null; save(); render(); toast('Removed saved cache');
 }
 function planRow(code, i, kind) {            // kind: 'in' (in the list), 'out' (candidate), 'coll' (collection)
   const c = C(code), noc = c.lat == null ? ' · <span class="warn" style="display:inline">no coordinates</span>' : '';
   return `<div class="row ${PLANFOCUS === code ? 'focus' : ''}" data-plan-code="${code}" data-plan-kind="${kind}">${kind === 'in' ? `<button class="grab" data-drag="${code}" aria-label="Drag ${esc(c.name)} to reorder" title="Drag to reorder">⠿</button>` : ''}<span class="idx">${kind === 'in' ? i + 1 : emo(c.type)}</span>
     <div class="rt"><b>${esc(c.name)}</b><small>${emo(c.type)} ${esc(c.type)} · ${esc(c.code)} <span data-distance="${code}">${esc(distanceText(code))}</span>${statusLine(code) ? ' · ' + esc(statusLine(code)) : ''}${noc}</small></div>
-    ${kind === 'in' ? `<button class="btn sm" data-act="toggleSel" data-code="${code}" aria-label="Remove from this list">✕</button>`
+    ${kind === 'in' ? `<button class="btn sm" data-act="toggleSel" data-code="${code}" aria-label="Remove from this list" title="Tap twice to remove from this list">✕</button>`
       : kind === 'out' ? `<button class="btn sm" data-act="toggleSel" data-code="${code}">+</button>`
       : `<button class="btn sm" data-act="addtolist" data-code="${code}">→ list</button>`}</div>`;
 }
 function renderPlan() {
   NEARBY.orderPos=NEARBY.pos?[NEARBY.pos.latitude,NEARBY.pos.longitude]:null;
   if (!Object.keys(DB.caches).length) { $('#app').innerHTML = `<div class="panel empty"><h1>No caches yet</h1><p>Use the ⇄ button at the top right to import a save, a Playwright export or a single cache.</p></div>`; return; }
-  const mode = planMode(), t = mode.list || null, f = PLANFOCUS && C(PLANFOCUS), prov = mapProv();
-  const loose = Object.keys(DB.caches).filter(unlisted), nIn = loose.filter(c => started(c) && !prog(c).logged).length, nNew = loose.filter(c => !started(c) && !prog(c).logged).length;
-  const cur = t ? 'trip:' + t.id : mode.coll, coll = mode.coll ? scopeList() : [];
-  const body = t ? `
+  const t = planTrip(), codes = planCodes(), prov = mapProv();
+  if (PLANFOCUS && !codes.includes(PLANFOCUS)) PLANFOCUS = null;
+  const f = PLANFOCUS && C(PLANFOCUS), loose = nearbyOrder(Object.keys(DB.caches).filter(unlisted));
+  const listed = t ? [] : codes.filter(c => !unlisted(c)), map = mapSVG();
+  const body = (t ? `
     <div class="btns"><button class="btn" data-act="auto">Auto-order (nearest next)</button><button class="btn" data-act="clearplan">Empty this list</button></div>
     <h3>${esc(listTitle(t))} (${t.codes.length}${t.codes.length > 1 ? ' · ≈' + routeMiles(t.codes).toFixed(1) + ' mi straight-line' : ''})</h3>
-    ${t.codes.length ? t.codes.filter(c => DB.caches[c]).map((c, i) => planRow(c, i, 'in')).join('') : '<div class="empty">Nothing in this list yet.</div>'}
-    <h3>Not in a list (${loose.length})</h3>
-    ${loose.length ? loose.map(c => planRow(c, 0, 'out')).join('') : '<div class="empty">Every cache is in a list.</div>'}`
-    : `<h3>${esc(scopeName())} (${coll.length})</h3>${nearbyHTML()}
-    ${coll.length ? coll.map((c, i) => planRow(c, i, 'coll')).join('') : '<div class="empty">Nothing here.</div>'}`;
+    ${t.codes.length ? t.codes.filter(c => C(c)).map((c, i) => planRow(c, i, 'in')).join('') : '<div class="empty">Nothing in this list yet.</div>'}`
+    : `${nearbyHTML()}${listed.length ? `<h3>In lists (${listed.length})</h3>${listed.map((c, i) => planRow(c, i, 'coll')).join('')}` : ''}`)
+    + `<h3>Not in a list (${loose.length})</h3>${loose.length ? loose.map(c => planRow(c, 0, t ? 'out' : 'coll')).join('') : '<div class="empty">Every cache is in a list.</div>'}`;
   $('#app').innerHTML = `
   <div class="panel"><div class="triprow">
       <select id="planscope" aria-label="What to plan">
-        ${DB.trips.length ? `<optgroup label="Lists">${DB.trips.map(x => `<option value="trip:${x.id}" ${cur === 'trip:' + x.id ? 'selected' : ''}>${esc(listTitle(x))} (${x.codes.length})</option>`).join('')}</optgroup>` : ''}
-        <optgroup label="Not in a list"><option value="inprog" ${cur === 'inprog' ? 'selected' : ''}>In progress (${nIn})</option><option value="unstarted" ${cur === 'unstarted' ? 'selected' : ''}>Not started (${nNew})</option></optgroup></select>
+        <option value="all" ${!t ? 'selected' : ''}>All incomplete caches (${Object.keys(DB.caches).filter(c => !prog(c).logged).length})</option>
+        ${DB.trips.length ? `<optgroup label="Lists">${DB.trips.map(x => `<option value="trip:${x.id}" ${t?.id === x.id ? 'selected' : ''}>${esc(listTitle(x))} (${x.codes.length})</option>`).join('')}</optgroup>` : ''}</select>
       ${t ? `<button class="btn sm" data-act="tripedit" data-id="${t.id}">Edit</button>` : ''}</div>
-    ${mapSVG()}
-    <div class="mapgesture"><span class="desktop-controls">Scroll or use a trackpad to zoom · drag to pan · double-click to return to auto-fit</span><span class="mobile-controls">Pinch to zoom · drag to pan · tap a marker to select it</span></div><button class="btn sm" data-act="autozoom">Fit all caches</button>
-    <div id="cap">${f ? `${emo(f.type)} <b>${esc(f.name)}</b> · ${esc(f.code)} <span class="btns" style="display:inline-flex;margin-left:4px">${mode.coll ? `<button class="btn sm" data-act="addtolist" data-code="${f.code}">→ list</button>` : ''}<button class="btn sm" data-act="mapfirst" data-code="${f.code}">Move to top of list</button><button class="btn sm danger" data-act="remove-plan-cache" data-code="${f.code}">Remove saved cache</button></span>` : (t ? '<span class="desktop-controls">Click a marker to add or remove it from the list; right-click to move it to position 1.</span><span class="mobile-controls">Tap a marker to add or remove it from the list. Select Move to top of list to visit it first.</span> Numbers show visit order. Hollow markers aren’t in any list yet.' : '<span class="desktop-controls">Click a marker to select it. Right-click to add it to the top of your current list.</span><span class="mobile-controls">Tap a marker to select it, then use Move to top of list to visit it first.</span> Zoom in to separate nearby markers.')}
-      <div class="note" id="tilenote" style="margin:4px 0 0">${PLANMISSING ? `${PLANMISSING} cache${PLANMISSING > 1 ? 's have' : ' has'} no coordinates, so ${PLANMISSING > 1 ? 'they aren’t' : 'it isn’t'} on the map (listed below). ` : ''}${PLANHIDDEN ? `${PLANHIDDEN} unlisted cache${PLANHIDDEN > 1 ? 's are' : ' is'} too far away to show. ` : ''}</div></div>
-    <div class="legend"><span>● other</span><span>■ EarthCache</span><span>◆ Multi</span></div>
+    <div class="mapwrap">${map}${map.startsWith('<svg') ? `<button class="btn mapfit" data-act="autozoom" aria-label="Fit all caches" title="Fit all caches"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/></svg></button>` : ''}</div>
+    <div id="cap" aria-live="polite">${f ? `<div class="mapselection"><div class="cachetitle">${emo(f.type)} <b>${esc(f.name)}</b> · ${esc(f.code)}</div>
+      <button class="btn viewcache" data-act="view-cache" data-code="${f.code}">View cache details</button>
+      <div class="btns">${t ? `<button class="btn sm" data-act="mapfirst" data-code="${f.code}">Move to top of list</button>` : `<button class="btn sm" data-act="map-add-list" aria-expanded="false" aria-controls="map-list-picker">Add to list</button>`}<button class="btn sm danger" data-act="remove-plan-cache" data-code="${f.code}">Remove saved cache</button></div>
+      ${!t ? `<select id="map-list-picker" class="maplistpicker" aria-label="Add ${esc(f.name)} to a list" data-map-add="${f.code}" hidden><option value="">Choose a list…</option>${DB.trips.map(x => `<option value="${esc(x.id)}" ${x.codes.includes(f.code) ? 'disabled' : ''}>${esc(listTitle(x))}${x.codes.includes(f.code) ? ' (already added)' : ''}</option>`).join('')}</select>${!DB.trips.length ? '<span class="note" id="map-no-lists" hidden>Create a list in the ☰ menu first.</span>' : ''}` : ''}</div>` : ''}
+      <div class="note" id="tilenote" style="margin:4px 0 0">${PLANMISSING ? `${PLANMISSING} cache${PLANMISSING > 1 ? 's have' : ' has'} no coordinates, so ${PLANMISSING > 1 ? 'they aren’t' : 'it isn’t'} on the map (listed below). ` : ''}</div></div>
+    <div class="legend"><span>● other</span><span>■ EarthCache</span><span>◆ Multi</span>${!t ? '<span>Left half filled: in progress</span><span>List icon: saved to a list</span>' : ''}</div>
     <div class="mapset"><label>Map<select id="mapprov">${Object.entries(MAPS).map(([k, v]) => `<option value="${k}" ${UI.mapProvider === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></label>
       ${prov.key ? `<label>API key<input type="text" id="cartokey" placeholder="paste your CARTO key" value="${esc(UI.cartoKey || '')}"></label><div class="note">Free, no account: <a href="https://carto.com/basemaps/apikey/" target="_blank" rel="noopener">carto.com/basemaps/apikey</a>. ${UI.cartoKey ? '' : 'Without a key the map stays blank.'}</div>` : ''}</div>
   </div>
-  <div class="panel">${t ? '<p class="note" style="margin-top:0">Drag the ⠿ handle to reorder quickly. Changes save when you release.</p>' : ''}${body}</div>`;
+  <div class="panel">${t ? '<p class="note" style="margin-top:0">Drag the ⠿ handle to reorder. Tap ✕ twice to remove a cache.</p>' : ''}${body}</div>`;
   setTimeout(() => { const m = document.getElementById('map'), n = document.getElementById('tilenote'); if (m && n && UI.mapProvider !== 'off' && !m.querySelector('image') && !(prov.key && !UI.cartoKey)) n.innerHTML += 'Map tiles didn’t load (offline, blocked, or outside this source’s coverage). Try another map source below.'; }, 5000);
   bindMapGestures();
 }
@@ -2144,7 +2164,7 @@ function cardHTML(code, i) {
   const meta = [c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.code)}</a>` : esc(c.code), c.owner ? 'by ' + esc(c.owner) : '',
     c.d != null && c.t != null ? `D${c.d}/T${c.t}` : '', c.size ? esc(c.size) : '',checkersOf(c).length?'<span class="badge">Checker posted</span>':''].filter(Boolean).join(' · ');
   return `<article class="card ${done ? 'done' : ''} t-${c.type.replace(/\W/g, '')}" id="card-${code}" data-code="${code}">
-    <div class="chead"><span class="num">${UI.scope.k === 'trip' ? i + 1 : emo(c.type)}</span><div class="ht"><h2>${esc(c.name)}</h2>
+    <div class="chead"><span class="num">${UI.scope.k === 'trip' && !UI.fieldCache ? i + 1 : emo(c.type)}</span><div class="ht"><h2>${esc(c.name)}</h2>
       <div class="meta"><span class="pill tag">${emo(c.type)} ${esc(c.type)}</span>${meta}</div></div>
       <div class="hr"><span class="dbadge">✓ Logged</span><button class="btn sm reopen" data-act="reopen" data-code="${code}">Undo log</button>
         <details class="menu"><summary aria-label="More actions">⋯</summary><div class="mpop">
@@ -2154,7 +2174,7 @@ function cardHTML(code, i) {
           <button data-act="addq" data-code="${code}">Add question</button>
           <button data-act="remove-cache" data-code="${code}">Remove from library</button></div></details></div></div>
     <div class="cwrap"><div class="cinner">
-      ${fillHTML(c)}${UI.scope.k !== 'trip' ? `<div class="note" data-distance="${code}">${esc(distanceText(code))}</div>` : ''}${photoBadge(c)}
+      ${fillHTML(c)}${UI.scope.k !== 'trip' || UI.fieldCache ? `<div class="note" data-distance="${code}">${esc(distanceText(code))}</div>` : ''}${photoBadge(c)}
       ${(c.policy || []).map(x => `<div class="policy">${esc(x)}</div>`).join('')}
       ${c.description ? `<details><summary>Full description</summary><div class="desc">${linkify(c.description)}</div></details>` : ''}
       ${metroEntryHTML(code)}${savedFinalHTML(code)}${ownerStageFormHTML(code)}${hintLinksHTML(code)}${waypointsHTML(code)}${imagesHTML(code)}${stagesHTML(code)}${puzzleHTML(code)}${questionsHTML(code)}
@@ -2200,11 +2220,12 @@ function afterCardRender(code) { restoreCacheDisclosures(code); refreshSavedFina
 function autogrow(el) { el.style.height = 'auto'; el.style.height = Math.max(44, el.scrollHeight) + 'px'; }
 function rerenderCard(code) {
   const el = document.getElementById('card-' + code); if (!el) return render();
-  captureCacheDisclosures(code);el.outerHTML = cardHTML(code, scopeList().indexOf(code)); afterCardRender(code); refreshHeader();
+  captureCacheDisclosures(code);el.outerHTML = cardHTML(code, fieldCodes().indexOf(code)); afterCardRender(code); refreshHeader();
 }
 function renderField() {
   NEARBY.orderPos=NEARBY.pos?[NEARBY.pos.latitude,NEARBY.pos.longitude]:null;
   if (!Object.keys(DB.caches).length) { $('#app').innerHTML = `<div class="panel empty"><h1>Welcome</h1><p>Your library is empty. Use the ⇄ button at the top right to import a save, a Playwright export, or a single cache from your Shortcut.</p></div>`; return; }
+  if (UI.fieldCache && C(UI.fieldCache)) { $('#app').innerHTML = cardHTML(UI.fieldCache, 0); afterCardRender(UI.fieldCache); return; }
   const list = scopeList(), logged = list.filter(c => prog(c).logged).length;
   $('#app').innerHTML = `<div class="scopebar"><b>${esc(scopeName())}</b><span>${logged}/${list.length} logged</span></div>`
     + nearbyHTML() + (list.length ? list.map((c, i) => cardHTML(c, i)).join('') : '<div class="empty">Nothing here. Add caches to a list in Plan, or pick another list from the ☰ menu.</div>');
@@ -2213,6 +2234,7 @@ function renderField() {
 function refreshHeader() {
   const chips = $('#chips');
   if (UI.tab !== 'field') { chips.innerHTML = ''; return; }
+  if (UI.fieldCache && C(UI.fieldCache)) { chips.innerHTML = '<span class="prog" style="padding:4px 6px">Single cache view</span>'; return; }
   const list = scopeList();
   chips.innerHTML = list.map((c, i) => `<button data-act="jump" data-code="${c}" title="${esc(C(c).name)}" aria-label="${esc(C(c).name)}" class="${prog(c).logged ? 'ok' : ''}">${prog(c).logged ? '✓' : UI.scope.k === 'trip' ? i + 1 : esc(c)}</button>`).join('')
     + (list.length ? `<span class="prog" style="align-self:center;padding:0 6px">${list.filter(c => prog(c).logged).length}/${list.length} logged</span>` : '');
@@ -2433,21 +2455,23 @@ document.addEventListener('click', async e => {
   const act = el.dataset.act, code = el.dataset.code, g = id => document.getElementById(id);
   if (act === 'drawer') { DRAWER = !DRAWER; renderDrawer(); return; }
   if (act === 'tab') { UI.tab = el.dataset.tab; DRAWER = false; save(); render(); window.scrollTo(0, 0); return; }
-  if (act === 'scope') { UI.scope = {k: el.dataset.k, id: el.dataset.id || null}; if (el.dataset.k === 'trip') UI.planTrip = el.dataset.id; if (el.dataset.go) UI.tab = 'field'; DRAWER = false; save(); render(); window.scrollTo(0, 0); return; }
+  if (act === 'scope') { UI.fieldCache = null; UI.scope = {k: el.dataset.k, id: el.dataset.id || null}; if (el.dataset.k === 'trip') UI.planTrip = el.dataset.id; if (el.dataset.go) UI.tab = 'field'; DRAWER = false; save(); render(); window.scrollTo(0, 0); return; }
   if (act === 'jump') { const n = g('card-' + code); if (n && n.scrollIntoView) n.scrollIntoView({behavior: 'smooth', block: 'start'}); return; }
   if (act === 'newtrip') { DRAWER = false; renderDrawer(); tripModal(''); return; }
   if (act === 'tripedit') { DRAWER = false; renderDrawer(); tripModal(el.dataset.id); return; }
   if (act === 'savetrip') {
     const name = (g('tname').value || '').trim() || 'List ' + (DB.trips.length + 1), emoji = firstGrapheme(g('temoji').value);
     if (el.dataset.id) { const t = DB.trips.find(x => x.id === el.dataset.id); if (t) { t.name = name; t.emoji = emoji; } }
-    else { const t = {id: uid(), name, emoji, codes: []}; DB.trips.push(t); UI.planTrip = t.id; UI.scope = {k: 'trip', id: t.id}; }
+    else { const t = {id: uid(), name, emoji, codes: []}; DB.trips.push(t); UI.planTrip = t.id; UI.planScope = {k: 'trip', id: t.id}; UI.scope = {k: 'trip', id: t.id}; UI.fieldCache = null; }
     closeModal(); save(); render(); return;
   }
-  if (act === 'deltrip') { DB.trips = DB.trips.filter(t => t.id !== el.dataset.id); if (UI.planTrip === el.dataset.id) UI.planTrip = null; if (UI.scope.id === el.dataset.id) UI.scope = {k: 'unstarted'}; closeModal(); save(); render(); return; }
+  if (act === 'deltrip') { DB.trips = DB.trips.filter(t => t.id !== el.dataset.id); if (UI.planTrip === el.dataset.id) UI.planTrip = null; if (UI.scope.id === el.dataset.id) UI.scope = {k: 'unstarted'}; if (UI.planScope?.id === el.dataset.id) UI.planScope = {k: 'all'}; closeModal(); save(); render(); return; }
   if (act === 'zoomin') { PLANZOOM = Math.min(4, PLANZOOM + 1); renderPlan(); return; }
   if (act === 'zoomout') { PLANZOOM = Math.max(-2, PLANZOOM - 1); renderPlan(); return; }
   if (act === 'autozoom') { PLANZOOM = 0; PLANPAN = {x:0,y:0}; renderPlan(); return; }
-  if (act === 'mapmark') { if (MAPMOVED) return; PLANFOCUS=code; UI.tab='field'; save(); render(); if(!document.getElementById('card-'+code)){ document.getElementById('app').innerHTML=cardHTML(code,0);afterCardRender(code); } document.getElementById('card-'+code)?.scrollIntoView({block:'start'}); return; }
+  if (act === 'mapmark') { if (MAPMOVED) return; PLANFOCUS = code; renderPlan(); return; }
+  if (act === 'view-cache') { openPlanCache(code); return; }
+  if (act === 'map-add-list') { const picker = g('map-list-picker'); picker.hidden = !picker.hidden; el.setAttribute('aria-expanded', String(!picker.hidden)); const empty = g('map-no-lists'); if (empty) empty.hidden = picker.hidden; if (!picker.hidden) picker.focus(); return; }
   if (act === 'nearby-refresh') { NEARBY.orderPos=NEARBY.pos?[NEARBY.pos.latitude,NEARBY.pos.longitude]:null; { if(NEARBY.watch!=null)navigator.geolocation.clearWatch(NEARBY.watch); NEARBY.watch=null; requestNearbyLocation(NEARBY.high); } render(); return; }
   if(act==='edit-final-info'){const p=prog(code),c=C(code);openModal(`<h2>Edit final details</h2>${!scrapedFinal(code)?`<label class="slab">Saved final coordinates<input id="edit-final-coords" type="text" value="${esc(p.solved||'')}" placeholder="N … W …"></label>`:''}<label class="slab">Hide and container details<textarea id="final-info-text" rows="6">${esc(Object.hasOwn(p,'final_details_override')?p.final_details_override:finalFacts(c).join('\n\n'))}</textarea></label><label class="slab">Hint<textarea id="final-hint-text" rows="3">${esc(Object.hasOwn(p,'final_hint_override')?p.final_hint_override:c.hint||'')}</textarea></label><button class="btn pri" data-act="save-final-info" data-code="${code}">Save details</button><button class="btn" data-act="closemodal">Cancel</button>`);return;}
   if(act==='save-final-info'){const p=PR(code);const coordinates=g('edit-final-coords');if(coordinates&&!scrapedFinal(code)){p.solved=coordinates.value;p.finalReviewed=true;p.solved_source='Entered final coordinates';}p.final_details_override=g('final-info-text').value;p.final_hint_override=g('final-hint-text').value;save();closeModal();refreshSavedFinal(code);toast('Final details saved');return;}
@@ -2463,6 +2487,12 @@ document.addEventListener('click', async e => {
   }
   if (act === 'mapfirst') { putCacheFirst(code,el); return; }
   if (act === 'toggleSel') {
+    const trip = planTrip();
+    if (trip?.codes.includes(code)) {
+      const key = 'list-remove:' + trip.id + ':' + code;
+      if (ARMED !== key || el.dataset.confirm !== '1') { ARMED = key; el.dataset.confirm = '1'; el.textContent = 'Tap again'; el.setAttribute('aria-label', 'Tap again to remove from this list'); setTimeout(() => { if (ARMED === key) ARMED = ''; if (el.isConnected) { delete el.dataset.confirm; el.textContent = '✕'; el.setAttribute('aria-label', 'Remove from this list'); } }, 4000); return; }
+      ARMED = '';
+    }
     togglePlanCode(code); return;
   }
   if (act === 'up' || act === 'down') { const t = planTrip(); if (!t) return; const i = t.codes.indexOf(code), j = act === 'up' ? i - 1 : i + 1; if (j >= 0 && j < t.codes.length) { const before=[...t.codes];[t.codes[i],t.codes[j]]=[t.codes[j],t.codes[i]];PLANFOCUS=code;save();render();tripUndo(t,before,'List order updated'); } return; }
@@ -2553,7 +2583,7 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('contextmenu', e => {
   const marker = e.target.closest && e.target.closest('#map g[data-code]'); if (!marker) return;
-  e.preventDefault(); putCacheFirst(marker.dataset.code);
+  e.preventDefault(); PLANFOCUS = marker.dataset.code; renderPlan();
 });
 let PLAN_DRAG = null;
 document.addEventListener('pointerdown', e => {
@@ -2583,6 +2613,7 @@ document.addEventListener('focusout', e => {
   const v = e.target.textContent.replace(/\s+/g, ' ').trim(); if (v) { st.inputs[j].l = v; save(); } else e.target.textContent = st.inputs[j].l;
 });
 document.addEventListener('keydown', e => {
+  if (e.target.matches?.('#map [data-act="mapmark"]') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); PLANFOCUS = e.target.dataset.code; renderPlan(); document.querySelector('[data-act="view-cache"]')?.focus({preventScroll:true}); return; }
   if (!e.target.dataset?.slabel) return;
   if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
   if (e.key === 'Escape') { const [c, s, j] = e.target.dataset.slabel.split('|'), st = C(c).stages.find(x => x.id === s); if (st && st.inputs[j]) e.target.textContent = st.inputs[j].l; e.target.blur(); }
@@ -2628,8 +2659,8 @@ document.addEventListener('change', async e => {
       p.logged = t.checked; if (card) card.classList.toggle('done', t.checked);
       if (t.checked) SESSION[c] = UI.scope.k; else delete SESSION[c];
       if (t.checked) {
-        confetti(t,'cache'); const list = scopeList(), next = list.slice(list.indexOf(c) + 1).find(x => !prog(x).logged);
-        if (next && UI.scope.k === 'trip') setTimeout(() => { const n = document.getElementById('card-' + next); if (n && n.scrollIntoView) n.scrollIntoView({behavior: 'smooth', block: 'start'}); }, 700);
+        confetti(t,'cache'); const list = fieldCodes(), next = list.slice(list.indexOf(c) + 1).find(x => !prog(x).logged);
+        if (next && UI.scope.k === 'trip' && !UI.fieldCache) setTimeout(() => { const n = document.getElementById('card-' + next); if (n && n.scrollIntoView) n.scrollIntoView({behavior: 'smooth', block: 'start'}); }, 700);
       }
     }
     save(); refreshHeader(); renderDrawer(); return;
@@ -2650,9 +2681,15 @@ document.addEventListener('change', async e => {
     } else { rerenderCard(c); renderDrawer(); }
     return;
   }
+  if (d.mapAdd) {
+    const trip = DB.trips.find(x => x.id === t.value); if (!trip || !C(d.mapAdd)) return;
+    const before = [...trip.codes]; if (!trip.codes.includes(d.mapAdd)) trip.codes.push(d.mapAdd);
+    save(); render(); tripUndo(trip, before, 'Added to ' + trip.name); return;
+  }
   if (t.id === 'planscope') {
-    if (t.value.startsWith('trip:')) { UI.scope = {k: 'trip', id: t.value.slice(5)}; UI.planTrip = t.value.slice(5); } else UI.scope = {k: t.value};
-    PLANZOOM = 0; PLANPAN = {x: 0, y: 0}; save(); render(); return;
+    UI.planScope = t.value.startsWith('trip:') ? {k: 'trip', id: t.value.slice(5)} : {k: 'all'};
+    if (UI.planScope.k === 'trip') UI.planTrip = UI.planScope.id;
+    PLANFOCUS = null; TOP_CONFIRM = null; ARMED = ''; PLANZOOM = 0; PLANPAN = {x: 0, y: 0}; save(); render(); return;
   }
   if (t.id === 'mapprov') { UI.mapProvider = t.value; PLANZOOM = 0; PLANPAN = {x: 0, y: 0}; save(); render(); return; }
   if (t.id === 'cartokey') { UI.cartoKey = t.value.trim(); save(); render(); return; }
