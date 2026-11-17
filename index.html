@@ -242,7 +242,7 @@ input[type=file]{font-size:14px;margin:6px 0;max-width:100%}
 .warn{color:var(--warn);font-size:.85rem;margin-top:6px}
 @media (prefers-reduced-motion:reduce){.stagecomplete,.stagecheck{transition:none}.stagecomplete.justdone,.stagecomplete.justdone::after,.stagecomplete.justdone .stagecheck,.stagecomplete.justdone .stagecheck path{animation:none}}
 .scopebar{display:flex;align-items:center;gap:10px;margin:0 0 10px}.scopebar span{color:var(--muted);font-size:13px}
-.triprow{display:flex;gap:8px;align-items:center;margin-bottom:8px}.triprow select{flex:1;min-width:0}
+.triprow{display:flex;gap:8px;align-items:center;margin-bottom:8px}.triprow select{flex:1;min-width:0;width:100%}
 select{font:inherit;font-size:16px;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);max-width:100%}
 .drawer{position:fixed;inset:0;z-index:50;pointer-events:none}.drawer.open{pointer-events:auto}
 .dback{position:absolute;inset:0;background:rgba(0,0,0,.42);opacity:0;transition:opacity .2s}.drawer.open .dback{opacity:1}
@@ -1915,7 +1915,7 @@ function renderPlan() {
         <option value="inprog" ${mode.coll === 'inprog' ? 'selected' : ''}>In progress (${scopeList({k:'inprog'}).length})</option>
         <option value="unstarted" ${mode.coll === 'unstarted' ? 'selected' : ''}>Not started (${scopeList({k:'unstarted'}).length})</option>
         ${DB.trips.length ? `<optgroup label="Lists">${DB.trips.map(x => `<option value="trip:${x.id}" ${t?.id === x.id ? 'selected' : ''}>${esc(listTitle(x))} (${x.codes.length})</option>`).join('')}</optgroup>` : ''}</select>
-      ${t ? `<button class="btn sm" data-act="tripedit" data-id="${t.id}">Edit</button>` : ''}</div>
+      </div>
     <div class="mapwrap">${map}${map.startsWith('<svg') ? `<button class="mapfit" data-act="autozoom" aria-label="Fit all caches" title="Fit all caches"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/></svg></button>` : ''}</div>
     <div id="cap" aria-live="polite">${f ? `<div class="mapselection"><div class="cachetitle">${emo(f.type)} <b>${esc(f.name)}</b> · ${esc(f.code)}</div>
       <button class="btn viewcache" data-act="view-cache" data-code="${f.code}">View cache details</button>
