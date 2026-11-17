@@ -30,7 +30,6 @@ h1{font-size:18px;margin:4px 0 8px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
 .btn,button.btn{display:inline-block;padding:8px 12px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:14px;font-weight:600;text-decoration:none;cursor:pointer}
 .btn.pri{background:var(--accent);color:var(--accent-t);border-color:var(--accent)}
-.btn.danger{color:#b42318;border-color:#d92d20;background:color-mix(in srgb,#d92d20 7%,var(--card))}
 .btn.sm{padding:5px 9px;font-size:13px}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
 svg#map{width:100%;height:auto;aspect-ratio:1;display:block;border-radius:10px;background:var(--bg);border:1px solid var(--line);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
@@ -375,6 +374,8 @@ details[open]:not(.menu)>summary::after,.metro-station[open]>summary::after{cont
 @keyframes cacheCompletePop{0%{transform:scale(1)}18%{transform:scale(.88)}48%{transform:scale(1.28)}72%{transform:scale(.94)}88%{transform:scale(1.06)}100%{transform:scale(1)}}
 @keyframes cacheCompleteDraw{from{stroke-dashoffset:22}to{stroke-dashoffset:0}}
 @media(prefers-reduced-motion:reduce){.btn.cache-complete,.cache-complete .cache-fill,.cache-complete .cache-check{transition:none}.cache-complete.cache-celebrate,.cache-complete.cache-celebrate::after,.cache-complete.cache-celebrate .cache-check,.cache-complete.cache-celebrate .cache-check path{animation:none}}
+button.danger,.btn.danger,.vwtools button.danger,.mpop button.danger{background:#b42318;border-color:#b42318;color:#fff}
+button.danger:hover,.btn.danger:hover,.vwtools button.danger:hover,.mpop button.danger:hover{background:#912018;border-color:#912018;color:#fff}
 </style>
 </head>
 <body>
@@ -1644,7 +1645,7 @@ async function openViewer(code, i) {
   Object.assign(VW, {code, i, arm: false});
   openModal(`<div class="vw"><div class="vwbar"><b>${esc(c.name)}</b><span>${i + 1}/${c.images.length}</span><button class="btn sm" data-act="vclose">Close</button></div>
     <div class="vwstage" id="vwstage"><img id="vwimg" alt="${esc(im.caption || im.name)}" draggable="false"></div>
-    <div class="vwtools"><button data-act="vfit" aria-label="Fit image" title="Fit image"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg></button><button data-act="vdel" aria-label="Delete image" title="Delete image"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg></button></div>
+    <div class="vwtools"><button data-act="vfit" aria-label="Fit image" title="Fit image"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg></button><button class="danger" data-act="vdel" aria-label="Delete image" title="Delete image"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg></button></div>
     <input class="vwcap" id="vwcap" type="text" placeholder="Caption (e.g. trail map, stage 3 diagram)" value="${esc(im.caption || '')}"></div>`, true);
   $('#modal').classList.add('vwm');
   const img = document.getElementById('vwimg'), url = await imgURL(im);
@@ -1903,7 +1904,7 @@ function renderPlan() {
   const f = PLANFOCUS && C(PLANFOCUS), loose = nearbyOrder(Object.keys(DB.caches).filter(c => unlisted(c) && (t || mode.coll === 'all' || codes.includes(c))));
   const listed = t || mode.coll !== 'all' ? [] : nearbyOrder(Object.keys(DB.caches).filter(c => !unlisted(c))), map = mapSVG();
   const body = (t ? `
-    <div class="btns"><button class="btn" data-act="auto">Auto-order (nearest next)</button><button class="btn" data-act="clearplan">Empty this list</button></div>
+    <div class="btns"><button class="btn" data-act="auto">Auto-order (nearest next)</button><button class="btn danger" data-act="clearplan">Empty this list</button></div>
     <h3>${esc(listTitle(t))} (${t.codes.length}${t.codes.length > 1 ? ' · ≈' + routeMiles(t.codes).toFixed(1) + ' mi straight-line' : ''})</h3>
     ${t.codes.length ? t.codes.filter(c => C(c)).map((c, i) => planRow(c, i, 'in')).join('') : '<div class="empty">Nothing in this list yet.</div>'}`
     : `${nearbyHTML()}${listed.length ? `<h3>In lists (${listed.length})</h3>${listed.map((c, i) => planRow(c, i, 'coll')).join('')}` : ''}`)
@@ -1982,7 +1983,7 @@ function taskHTML(code, q, i) {
       <label class="slab">Helpful context<textarea data-qfield="${code}|${q.id}|context" rows="2">${esc(q.context || '')}</textarea></label>
       <label class="slab">Answer type<select data-qtype="${code}|${q.id}">${[['text','Short text'],['textarea','Long text'],['number','Number'],['choice','Choice'],['confirmation','Confirmation'],['image','Photo / camera']].map(([v,l]) => `<option value="${v}" ${q.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <input type="text" data-qnum="${code}|${q.id}" placeholder="Question number used in the message" value="${esc(q.n || '')}">
-      <button class="btn sm" data-act="delq" data-code="${code}" data-qid="${q.id}" style="margin-top:6px">Remove question</button></div>` : '';
+      <button class="btn sm danger" data-act="delq" data-code="${code}" data-qid="${q.id}" style="margin-top:6px">Remove question</button></div>` : '';
   const opts = (q.options || []).length ? `<div class="opts">Options in listing: ${q.options.map(o => esc((o.label ? o.label + ') ' : '') + o.text)).join(' · ')}</div>` : '';
   const detail = [q.location ? `<b>Where:</b> ${esc(q.location)}` : '', q.context ? esc(q.context) : '', q.instructions && q.instructions !== q.prompt ? esc(q.instructions) : ''].filter(Boolean).join('<br>');
   let answer = '';
@@ -2183,7 +2184,7 @@ function cardHTML(code, i) {
           ${multi ? `<button data-act="edit-stages" data-code="${code}">Edit stages</button>` : ''}
           <label class="mbtn">Add image<input type="file" accept="image/*" multiple hidden data-attach="${code}"></label>
           <button data-act="addq" data-code="${code}">Add question</button>
-          <button data-act="remove-cache" data-code="${code}">Remove from library</button></div></details></div></div>
+          <button class="danger" data-act="remove-cache" data-code="${code}">Remove from library</button></div></details></div></div>
     <div class="cwrap"><div class="cinner">
       ${fillHTML(c)}${UI.scope.k !== 'trip' || UI.fieldCache ? `<div class="note" data-distance="${code}">${esc(distanceText(code))}</div>` : ''}${photoBadge(c)}
       ${(c.policy || []).map(x => `<div class="policy">${esc(x)}</div>`).join('')}
@@ -2414,7 +2415,7 @@ function renderData() {
     <details><summary>Save format (valid JSON)</summary>
     <p class="note">A single cache, a list of caches, or this wrapper all import. A link ending <code>#import=&lt;base64url JSON&gt;</code> opens this page with the data ready to import.</p>
     <pre class="prev">${esc(SAMPLE)}</pre></details></div>
-  <div class="panel"><button class="btn sm" data-act="reset" id="reset">Erase everything in this browser</button></div>`;
+  <div class="panel"><button class="btn sm danger" data-act="reset" id="reset">Erase everything in this browser</button></div>`;
   PENDING_IMPORT = '';
 }
 function render() {
@@ -2437,7 +2438,7 @@ function tripModal(id) {
     <div class="note" style="margin-top:4px">Tap the box, then use your keyboard’s emoji key — any emoji works. Or pick one:</div>
     <div class="epicks">${EMOJI_PICKS.map(e => `<button class="epick" data-act="pickemoji" data-e="${e}">${e}</button>`).join('')}</div>
     <label>Title<input type="text" id="tname" value="${esc(t ? t.name : '')}" placeholder="e.g. National Mall"></label>
-    <div class="btns" style="margin-top:12px"><button class="btn pri" data-act="savetrip" data-id="${t ? t.id : ''}">Save</button><button class="btn" data-act="closemodal">Cancel</button>${t ? `<button class="btn" data-act="deltrip" data-id="${t.id}" style="margin-left:auto">Delete list</button>` : ''}</div>
+    <div class="btns" style="margin-top:12px"><button class="btn pri" data-act="savetrip" data-id="${t ? t.id : ''}">Save</button><button class="btn" data-act="closemodal">Cancel</button>${t ? `<button class="btn danger" data-act="deltrip" data-id="${t.id}" style="margin-left:auto">Delete list</button>` : ''}</div>
     ${t ? '<p class="note">Deleting a list keeps its caches; they go back to In progress / Not started.</p>' : ''}`);
   setTimeout(() => { const i = $('#tname'); if (i) i.focus(); }, 50);
 }
@@ -2500,7 +2501,7 @@ document.addEventListener('click', async e => {
     const trip = planTrip();
     if (trip?.codes.includes(code)) {
       const key = 'list-remove:' + trip.id + ':' + code;
-      if (ARMED !== key || el.dataset.confirm !== '1') { ARMED = key; el.dataset.confirm = '1'; el.textContent = 'Tap again'; el.setAttribute('aria-label', 'Tap again to remove from this list'); setTimeout(() => { if (ARMED === key) ARMED = ''; if (el.isConnected) { delete el.dataset.confirm; el.textContent = '✕'; el.setAttribute('aria-label', 'Remove from this list'); } }, 4000); return; }
+      if (ARMED !== key || el.dataset.confirm !== '1') { ARMED = key; el.dataset.confirm = '1'; el.classList.add('danger'); el.textContent = 'Remove from list?'; el.setAttribute('aria-label', 'Remove from list?'); setTimeout(() => { if (ARMED === key) ARMED = ''; if (el.isConnected) { delete el.dataset.confirm; el.classList.remove('danger'); el.textContent = '✕'; el.setAttribute('aria-label', 'Remove from this list'); } }, 4000); return; }
       ARMED = '';
     }
     togglePlanCode(code); return;
@@ -2509,7 +2510,7 @@ document.addEventListener('click', async e => {
   if(act==='auto'){const t=planTrip();if(t){const before=[...t.codes];nearestOrder(t);save();render();tripUndo(t,before,'List reordered by distance');}return;}
   if(act==='clearplan'){const t=planTrip();if(t){const before=[...t.codes];t.codes=[];save();render();tripUndo(t,before,'List emptied');}return;}
   if (act === 'remove-plan-cache') {
-    if (ARMED !== 'planrm:' + code) { ARMED = 'planrm:' + code; el.textContent = matchMedia('(pointer: coarse)').matches ? 'Tap again to remove' : 'Click again to remove'; setTimeout(() => { if (ARMED === 'planrm:' + code) ARMED = ''; if (el.isConnected) el.textContent = 'Remove saved cache'; }, 4000); return; }
+    if (ARMED !== 'planrm:' + code) { ARMED = 'planrm:' + code; el.textContent = 'Remove saved cache?'; setTimeout(() => { if (ARMED === 'planrm:' + code) ARMED = ''; if (el.isConnected) el.textContent = 'Remove saved cache'; }, 4000); return; }
     ARMED = ''; deleteSavedCache(code); return;
   }
   if (act === 'copy') { await copyText(buildMsg(code)); return; }
@@ -2544,7 +2545,7 @@ document.addEventListener('click', async e => {
   if (act === 'savestages') { const c = C(code); const previous=c.stages; c.stages = textToStages(g('stext').value, previous); remapStageInputs(code,previous,c.stages); c.auto_stages = false; closeModal(); save(); rerenderCard(code); return; }
   if (act === 'remove-cache') {
     openModal(`<h2>Remove from library?</h2><p>“${esc(C(code).name)}” and its saved answers will be deleted from this browser. Export first if you want a copy.</p>
-      <div class="btns"><button class="btn pri" data-act="confirm-remove" data-code="${code}" style="background:#c0392b;border-color:#c0392b">Remove</button><button class="btn" data-act="closemodal">Cancel</button></div>`); return;
+      <div class="btns"><button class="btn danger" data-act="confirm-remove" data-code="${code}">Remove</button><button class="btn" data-act="closemodal">Cancel</button></div>`); return;
   }
   if (act === 'confirm-remove') { closeModal(); deleteSavedCache(code); return; }
   if(act==='metro-map'){openMetroMap();return;}

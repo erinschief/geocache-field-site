@@ -172,9 +172,11 @@ def run_flow(browser, origin, touch):
     assert state(page)['trips'][0]['codes'][0] == 'GCTWO'
     # Remove from route requires two taps and keeps the saved cache and progress.
     remove = page.locator('[data-plan-kind="in"][data-plan-code="GCONE"] [data-act="toggleSel"]')
+    expect(remove).not_to_have_class(re.compile('danger'))
     remove.click()
     assert 'GCONE' in state(page)['trips'][0]['codes']
-    expect(remove).to_have_text('Tap again')
+    expect(remove).to_have_text('Remove from list?')
+    expect(remove).to_have_class(re.compile('danger'))
     remove.click()
     assert 'GCONE' not in state(page)['trips'][0]['codes']
     assert 'GCONE' in state(page)['caches']
@@ -201,6 +203,7 @@ def run_flow(browser, origin, touch):
     remove = page.locator('[data-plan-kind="in"][data-plan-code="GCONE"] [data-act="toggleSel"]')
     remove.click()
     expect(remove).to_have_text('✕', timeout=5000)
+    expect(remove).not_to_have_class(re.compile('danger'))
     remove.click()
     assert 'GCONE' in state(page)['trips'][0]['codes']
     # The newly armed removal cannot carry into a new scope.
