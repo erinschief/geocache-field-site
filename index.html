@@ -2389,7 +2389,6 @@ function renderData() {
     <div class="btns"><button class="btn pri" data-act="exp-dl">Download .json</button><button class="btn" data-act="exp-copy">Copy to clipboard</button></div>
     <h3>Smaller portable saves</h3><p class="note">Transfer a small text save for answers, progress and cache details. Transfer its image pack once per device, then again when you add or change photos. Image IDs link the two files. Gzip compression preserves image quality; your existing full JSON backups still work.</p>
     <div class="btns"><button class="btn" data-act="export-text">Download text save</button><button class="btn" data-act="export-media">Download image pack</button><button class="btn" data-act="export-gzip">Download compressed full backup</button></div><div id="portable-status" class="note" role="status"></div>
-    <textarea class="dtext" id="expbox" readonly rows="6">${esc(JSON.stringify(buildSave('all'), null, 2))}</textarea>
   </div>
   ${syncReviewHTML()}<div class="panel"><h3 style="margin-top:0">Import</h3>
     <div class="seg"><label><input type="radio" name="impmode" value="merge" ${mode === 'merge' ? 'checked' : ''}> Add to existing save</label><label><input type="radio" name="impmode" value="replace" ${mode === 'replace' ? 'checked' : ''}> Replace everything</label></div>
@@ -2572,7 +2571,6 @@ document.addEventListener('click', async e => {
   if (act === 'exp-dl' || act === 'exp-copy' || act === 'exp-all') {
     const scope = act === 'exp-all' ? 'all' : (g('expscope') || {value: 'all'}).value, withImg = act === 'exp-all' || !g('expimg') || g('expimg').checked;
     const text = JSON.stringify(await buildSaveFull(scope, withImg), null, 2);
-    if (g('expbox') && act !== 'exp-all') g('expbox').value = text;
     UI.lastExport = Date.now(); save();
     if (act === 'exp-copy') { await copyText(text); }
     else downloadJSON(text, `geocache-field-${scope.replace(/\W+/g, '-')}-${new Date().toISOString().slice(0, 10)}.json`);
@@ -2712,7 +2710,6 @@ document.addEventListener('change', async e => {
   if (t.id === 'cartokey') { UI.cartoKey = t.value.trim(); save(); render(); return; }
   if (t.id === 'impdest') { UI.importDest = t.value; save(); const n = document.querySelector('.newlist'); if (n) n.hidden = t.value !== 'new'; return; }
   if (t.name === 'impmode') { UI.importMode = t.value; save(); return; }
-  if (t.id === 'expscope') { document.getElementById('expbox').value = JSON.stringify(buildSave(t.value), null, 2); return; }
   if (t.id === 'impfile' && t.files && t.files[0]) {
     try { document.getElementById('impbox').value=await readSaveFile(t.files[0]); const m=document.getElementById('impmsg');m.className='note';m.textContent='File loaded — import a text save first, then its image pack. Full JSON and gzip backups work too.'; }
     catch(err){const m=document.getElementById('impmsg');m.className='note err';m.textContent=err.message;}
