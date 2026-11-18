@@ -20,3 +20,5 @@ Opening details from the overview creates a persistent **Single cache view**. Ed
 ## Map regressions
 
 Run `python tests/test_plan_map.py` with Playwright and Chromium installed (`CHROMIUM_PATH` defaults to `/usr/bin/chromium`). The test uses synthetic caches and blocks external requests. It covers desktop/mobile selection, list filtering, progress markers, dropdown assignment, persistent single-cache details, route edits, confirmation expiry, Undo, dragging, map gestures and empty states. It never reads personal saves or image packs.
+
+Metro station alignment is checked with `python tests/test_metro_alignment.py` (also requires Pillow). All 16 checkbox centers are compared with reviewed station symbols in the embedded map at desktop/mobile sizes, after zooming, panning, completion badges and resizing.
