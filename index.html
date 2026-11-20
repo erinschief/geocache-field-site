@@ -75,6 +75,7 @@ summary{cursor:pointer;font-weight:600;font-size:14px;padding:4px 0}
 .task{margin:12px 0}
 .task .q{display:flex;gap:8px;font-size:15px;font-weight:600;margin-bottom:5px}
 .task .q span.n{flex:0 0 22px;color:var(--accent)}
+.task .qanswer{margin-left:30px}
 textarea,input[type=text]{width:100%;font:inherit;font-size:16px;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--text);resize:vertical}
 textarea.ans{min-height:44px;overflow:hidden}
 .edit{border:1px dashed var(--line);border-radius:10px;padding:8px;margin:8px 0}
@@ -1996,7 +1997,7 @@ function taskHTML(code, q, i) {
   else if (q.type === 'confirmation') answer = `<label class="chk"><input type="checkbox" data-acheck="${code}|${q.id}" ${a ? 'checked' : ''}> Confirmed</label>`;
   else answer = `<textarea class="ans" data-ans="${code}|${q.id}" rows="${q.type === 'textarea' ? 3 : 1}" placeholder="${esc(expectedInputPlaceholder(q))}">${esc(typeof a === 'string' ? a : '')}</textarea>`;
   return `<div class="task"><div class="q"><span class="n">${esc(qnum(q, i))}</span><span class="qt">${esc(q.title || q.prompt || 'Photo task')}</span>
-    <button class="pen ${on ? 'on' : ''}" data-act="editq" data-code="${code}" data-qid="${q.id}" aria-label="${on ? 'Finish editing question' : 'Edit question'}" title="${on ? 'Finish editing' : 'Edit question'}">${on ? CHECK : PEN}</button></div>${q.title && q.prompt ? `<div class="qdetail">${esc(q.prompt)}</div>` : ''}${detail ? `<div class="qdetail">${detail}</div>` : ''}${opts}${edit}${answer}</div>`;
+    <button class="pen ${on ? 'on' : ''}" data-act="editq" data-code="${code}" data-qid="${q.id}" aria-label="${on ? 'Finish editing question' : 'Edit question'}" title="${on ? 'Finish editing' : 'Edit question'}">${on ? CHECK : PEN}</button></div>${q.title && q.prompt ? `<div class="qdetail">${esc(q.prompt)}</div>` : ''}${detail ? `<div class="qdetail">${detail}</div>` : ''}${opts}${edit}<div class="qanswer">${answer}</div></div>`;
 }
 function questionsHTML(code) {
   if(isMetroTour(code))return "";
