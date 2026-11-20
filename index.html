@@ -550,7 +550,7 @@ function setMetroDone(i,done,from){
   control.closest('.stage')?.classList.add('sdone');
   const msg=control.querySelector('.stagemsg');if(msg)msg.innerHTML='<b>Stage completed</b><small>Nice work — progress saved</small>';
   try{navigator.vibrate?.(12);}catch(_){}
-  METRO_COMPLETE_TIMERS.set(i,setTimeout(()=>{METRO_COMPLETE_TIMERS.delete(i);if(C(METRO_CODE)){metroRefreshStationViews();renderDrawer();}},Math.max(560,celebration||0)));
+  METRO_COMPLETE_TIMERS.set(i,setTimeout(()=>{METRO_COMPLETE_TIMERS.delete(i);if(C(METRO_CODE)){metroRefreshStationViews();if(control.closest('.stage'))advanceCompletedStage(METRO_CODE,id,true);renderDrawer();}},Math.max(560,celebration||0)));
  }else metroRefreshStationViews();
 }
 
@@ -2234,6 +2234,27 @@ document.addEventListener('toggle',e=>{
  if(prog(code).disclosures?.[key]===el.open)return;const p=PR(code);p.disclosures=p.disclosures||{};p.disclosures[key]=el.open;scheduleSave();
 },true);
 function afterCardRender(code) { restoreCacheDisclosures(code); refreshSavedFinal(code); document.querySelectorAll(`#card-${code} .mdta`).forEach(autogrow); hydrateImages(document.getElementById('card-' + code)); refreshCard(code); (C(code).stages || []).forEach(s => updStage(code, s.id)); updPuzzle(code); document.querySelectorAll(`#card-${code} textarea.ans`).forEach(autogrow); }
+function advanceCompletedStage(code, sid, metro = false) {
+  const card = document.getElementById('card-' + code); if (!card) return;
+  const stages = C(code).stages || [], index = stages.findIndex(s => s.id === sid);
+  const nextId = metro ? metroStationOrder().filter(i => !metroDone(i)).map(i => 'metro' + (i + 1))[0] : stages[index + 1]?.id;
+  const findStage = id => metro
+    ? card.querySelector(`[data-metro-station-row="${Number(id.slice(5)) - 1}"]`)
+    : [...card.querySelectorAll('[data-sdone]')].find(el => el.dataset.sdone === code + '|' + id)?.closest('.stage');
+  const completed = findStage(sid), next = nextId ? findStage(nextId) : null;
+  if (completed) completed.open = false;
+  if (next) next.open = true;
+  PR(code).focus_stage = nextId || null;
+  captureCacheDisclosures(code); scheduleSave();
+  if (!next) return;
+  const heading = next.querySelector(':scope > summary');
+  heading?.focus({preventScroll: true});
+  requestAnimationFrame(() => {
+    if (!next.isConnected) return;
+    const headerBottom = document.querySelector('header')?.getBoundingClientRect().bottom || 0;
+    window.scrollTo({top: Math.max(0, window.scrollY + next.getBoundingClientRect().top - headerBottom - 8), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+  });
+}
 function autogrow(el) { el.style.height = 'auto'; el.style.height = Math.max(44, el.scrollHeight) + 'px'; }
 function rerenderCard(code) {
   const el = document.getElementById('card-' + code); if (!el) return render();
@@ -2715,7 +2736,7 @@ document.addEventListener('change', async e => {
       if (stage) stage.classList.add('sdone');
       if (msg) msg.innerHTML = '<b>Stage completed</b><small>Nice work — progress saved</small>';
       try { if ('vibrate' in navigator) navigator.vibrate(12); } catch (_) {}
-      setTimeout(() => { if(t.isConnected && t.checked){rerenderCard(c); renderDrawer();} }, Math.max(560,celebration||0));
+      setTimeout(() => { if(t.isConnected && t.checked){rerenderCard(c); advanceCompletedStage(c,s); renderDrawer();} }, Math.max(560,celebration||0));
     } else { rerenderCard(c); renderDrawer(); }
     return;
   }
